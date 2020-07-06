@@ -1,0 +1,66 @@
+% !TEX root=./tech-specification.tex
+
+
+\subsection{Token Issuance}
+
+To obtain the resources to make Conflux live, the Conflux Chain Foundation is launching a private pre-sale in Q3 2018. 
+The price is {\bf 0.08 USD} per Conflux Coin. 
+The coin pre-sale uses a standard SAFT. 
+The purchased coins will be issued to investors linearly over two years after the deployment of the Conflux Blockchain main-net in Q3 2019.
+
+\subsection{Genesis Block}
+\label{sec:genesis}
+
+The Genesis Block will contain {\bf 5,000,000,000} (five billion) Conflux coins.  
+The distribution of Genesis Block is as follows (Figure~\ref{fig:genesis}):
+
+\begin{itemize}
+	\item {\bf Founding Team \& Investors:} {\bf 19.5\%} of Conflux coins in the Genesis block will be awarded to the founding team including the IIIS team and Alt-chain Technologies shareholders. The founding team awards will be vested linearly over 4 years after the main-net launch.
+	
+	\item {\bf Private Sale:} {\bf 16\%} of Conflux coins in Genesis Block (i.e., 800,000,000 coins) will be sold to investors to raise fund. The price is {\bf 0.08 USD} per Conflux Coin.The purchased coins will be issued to investors linearly over two years after the main-net launch.
+ 
+
+	\item {\bf Foundation Employees \& Advisors: 16.5\%} of Conflux coins in the Genesis block will be used as an incentive pool for foundation employees and advisors. Coins awarded to employees \& advisors will be vested linearly over 4 years.
+
+
+	\item {\bf Marketing \& Community Building: 6\%} of Conflux coins in Genesis block will be used for marketing and community building.
+
+	\item {\bf Ecosystem Investment Funds: 30\%} of Conflux coins in the Genesis block will become an ecosystem fund to invest future DAPP projects on the Conflux chain. This fund will be collaboratively managed by communities (e.g., Conflux investors in this round). 
+	The Conflux Chain Foundation will guide the overall investment pace of the fund, while each accredited investment institution who owns significant stakes in the Conflux system will be a general partner to manage parts of the fund proportional to the purchased and owned stakes.	
+
+	\item {\bf Long-term Reserve: 12\%} of Conflux coins in Genesis block will be the long-term strategic reserve for the foundation.
+\end{itemize}
+
+
+\begin{figure*}
+	\centering
+	\includegraphics[width=0.8\textwidth]{figs/genesis_dist}
+	\caption{Genesis Distribution}
+	\label{fig:genesis}
+\end{figure*}
+
+\subsection{Mining Schedules}
+\label{sec:mining schedule}
+After the launch of the Conflux main-net, new Conflux coins will be generated via mining. Conflux will operate initially with decentralized proof-of-work mining to secure its network for at least five years. Eventually, Conflux may shift to a proof-of-stake or a composite (combining Proof-of-work and Proof-of-stake) mechanism in the long run.
+
+\begin{figure*}[h]
+	\centering
+	\includegraphics[width=0.8\textwidth]{figs/mining_schedule}
+	\caption{Mining Releases \& Inflation}
+	\label{fig:mining}
+\end{figure*}
+
+Figure~\ref{fig:mining} presents the annual mining output and the inflation rate of the system. The miner will generate 1,000,000,000 Conflux coins in the first year in total. The mining output declines every three months. The mining output halves every $42$ months. 
+More specifically, the block award starts from $900$ coins per block and decreases by $4.830484698\%$ every $1576800
+$ blocks (note that the height does not represent the number of blocks in a \tg), since $0.04830484698=1-(0.5)^{1/14}$ guarantees the mining output halves after $14$ decreases in roughly $42$ months.
+This declining process continues until the inflation rate drops below 2 percent. After the Conflux ecosystem becomes mature, the annual inflation rate is projected at $2$ percent. This inflation represents a payment made by all members of the community to the PoW/PoS miners for keeping the system functional.
+
+\begin{figure*}[h]
+	\centering
+	\includegraphics[width=0.8\textwidth]{figs/snapshot_y2}
+	\caption{Snapshot at the End of Year 2}
+	\label{fig:year2}
+\end{figure*}
+Figure~\ref{fig:year2} presents the Conflux Coin distribution snapshot at the end of year 2 (i.e., two years after the main-net launch), when all purchased coins are issued to the investors. At the end of year 2, the total projected circulation of Conflux coin will be {\bf 6,820,335,356} and the sold coins in this private sale correspond to {\bf 11.73\%} of the total circulation. At the end of year 5, the total circulation of Conflux coin will be projected at 8,498,192,041. At the end of year 10, the total circulation of Conflux coin will be projected at 9,797,765,390.
+
+

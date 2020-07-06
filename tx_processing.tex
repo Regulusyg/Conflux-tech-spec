@@ -1,0 +1,1211 @@
+% !TEX root = ./tech-specification.tex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Transaction Processing}
+\label{sec:tx_processing}
+
+\name implements the same virtual machine as Ethereum \cite{ETH_yellow}. 
+Roughly speaking, after determining the total order of transactions and removing invalid transactions, the remaining valid transactions are executed on the \cvm as if they are packed into sequential blocks on an Ethereum-like chain.
+In what follows we focus on the \name specific designs in the execution.
+
+\subsection{Gas and Payment}
+\label{subsec:gas_and_pay}
+
+As defined in Section~\ref{sec:tx} every transaction $\tx$ has two fields of {\bf gasLimit} and {\bf gasPrice} that declare the specific amount of associated gas $\tx_g$ and the price $\tx_p$ of per unit gas.
+When starting the execution of a transaction $\tx$, the purchase of gas happens at the price $\tx_g \times \tx_p$ and the transaction $\tx$ is considered invalid if the actor responsible for the cost of gas consumption cannot afford such a purchase.
+% , i.e. $\sender{\tx}_b < \tx_g \times \tx_p$.
+\newversion{
+	Normally $\sender{\tx}$, the sender of $\tx$, is responsible for the cost of gas consumption. 
+	In case the transaction $\tx$ is calling a smart contract $\contract$ with sponsorship for gas consumption and $\tx$ is qualified for the subsidy as specified in Section~\ref{sec:sponsor}, 
+	$\contract$ is responsible for the purchase of gas if it has sufficient \textbf{sponsor balance for gas},
+	and otherwise the sender $\sender{\tx}$ is still responsible for the whole purchase of gas as if there were no sponsor at all.
+}
+Like in Ethereum, gas does not exist outside the execution of transactions.
+
+
+	The unused gas can be refunded after the transaction $\tx$ is executed, but no more than a quarter of the total value spent on purchasing. 
+	Thus, the \emph{refundable amount of gas} $g^{\dagger}$ is the minimum of the \emph{legitimately remaining gas} $g'$ and a quarter of the \textbf{gasLimit} of $\tx$,
+	i.e. $g^{\dagger}\eqdef \min\set{g', \tx_g/4}$, 
+	where in principle no gas is refundable (i.e. $g^{\dagger} = g' = 0$) if the execution of $\tx$ fails due to the sender's fault. 
+	The \emph{consumed amount of gas}\footnote{Here for simplicity we write $\gused(\cdot)$ as a function of $\tx$. However it is indeed a function defined on both $\tx$ and the world-state at the beginning of the execution of $\tx$. Thus, multiple occurrences of $\tx$ are considered as distinct inputs for this function and they may incur different amount of consumed gas.} $\gused(\tx)$ is defined as
+	\begin{align*}
+		\gused(\tx) \eqdef \begin{cases}
+			\tx_g-g^{\dagger} & \mbox{if $\tx$ is executed}\\
+			0 & \mbox{if $\tx$ is not executed (i.e. only when $R_z=2$ as in Section~\ref{sec:tx validate})}
+		\end{cases} 
+	\end{align*}
+	The actor who initially purchased the gas for $\tx$ will get the refund of $g^{\dagger}\times\tx_p$.
+
+The \coinsign paid for the consumed gas, which is $\gused(\tx)\times\tx_p = \left(\tx_g-g^{\dagger}\right)\times \tx_p$, is added to the reward pool for miners. 
+Thus in general a higher gas price on a transaction would cost the sender more but also increase the chance of being processed timely.
+
+\subsection{Pre-execution Validation}
+\label{sec:tx validate}
+
+% Code references: 
+%    /core/src/executive/executive.rs transact\emptystring
+%    /core/src/consensus/consensus_inner/consensus executor.rs process_epoch_transactions\emptystring
+Before being executed, a transaction $\tx$ in the processing queue must pass the following secondary test of intrinsic validity. 
+\begin{enumerate}[nosep]
+	\item \newversion{The current epoch is in the range specified by \textbf{epochHeight}, 
+	i.e. current epoch height is in $[\tx_e - \txepochbound, \tx_e + \txepochbound]$.}
+	
+	\item The transaction \textbf{nonce} is valid,
+	% (eqdefalent to the current nonce of the sender account, 
+   i.e. $\tx_n = \st\left[\sender{\tx}\right]_n$ where $\st$ is the current world-state.
+
+   \item The recipient address is valid , i.e. the type indicator (first $4$-bit) of $\tx_a$ belongs to $\set{\typereserved,\typenormal,\typecontract}$.
+\end{enumerate}
+
+
+	% \item The \textbf{gasLimit} $\tx_g$ is no smaller than the intrinsic gas $g_0$ used by the transaction. 
+	% This should never happen since we have checked that every transaction packed in a valid block must satisfy its intrinsic gas requirement.
+
+	
+	% \item \newversion{When dust protection is enabled, the transaction sender must exists in world-state $\st$. Conflux does not enable dust protection in the current version.}
+
+    % \item The total gas used in the current block (including $\tx_g$) does not exceed block gas limit $\head_l$.
+	% This should never happen since we have checked block gas limit before SyncGraph Validate if transactions fit into a given block.  
+
+
+	% \item \newversion{The sender account balance contains at least the cost required in up-front payment:
+	% % Check whether $\tx$ is qualified for the subsidy for gas consumption.
+	% }
+
+% 	\item \newversion{The sender account balance contains at least the cost  required in up-front payment:
+% 	% Check whether $\tx$ is qualified for the subsidy for gas consumption.
+% 	}
+% 	\begin{itemize}[nosep]
+% 		\item if $\tx$ is calling a contract $\contract$ with $\tx_p\times \tx_g <\min\set{\textbf{sponsor limit for gas fee},\textbf{sponsor balance for gas}}$ and $\sender{\tx}$ in the \textbf{whitelist} of $\contract$,
+% 		then the gas consumption of $\tx$ is sponsored and the balance of $\sender{\tx}$ should satisfy $\st\left[\sender{\tx}\right]_b\ge \tx_v$;
+	% \item \newversion{The sender account balance contains at least the cost  required in up-front payment:
+	% % Check whether $\tx$ is qualified for the subsidy for gas consumption.
+	% }
+	% \begin{itemize}[nosep]
+	% 	\item if $\tx$ is calling a contract $\contract$ with $\tx_p\times \tx_g \le \min\set{\textbf{sponsor limit for gas fee},\textbf{sponsor balance for gas}}$ and $\sender{\tx}$ in the \textbf{whitelist} of $\contract$,
+	% 	then the gas consumption of $\tx$ is sponsored and the balance of $\sender{\tx}$ should satisfy $\st\left[\sender{\tx}\right]_b\ge \tx_v$;
+
+% 		\item otherwise the balance of $\sender{\tx}$ should satisfy $\st\left[\sender{\tx}\right]_b\ge \tx_p\tx_g+\tx_v$.
+
+% 	\end{itemize}
+	
+% \end{enumerate}
+% \smallskip
+
+Note that the local legality of the transaction, 
+e.g. the $\rlp$ format
+% , intrinsic gas limit, 
+and the validity of signature, 
+is already verified in the first intrinsic validity test before accepting the corresponding block into the \name \tg, as discussed in Section~\ref{sec:block validate},
+and will not be checked again at this moment.
+
+If $\tx$ fails at these checks, the transaction will not be executed, the nonce for account will not increase and no transaction fee is charged for such transaction. Let $R'$ be the receipt of last transaction.
+Then the receipt of current transaction will be as follows:
+\begin{align}
+	R_u=R'_u && R_{\bf l}=\emptystring && R_z=2 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+\end{align}
+%
+(The bloom filter $R_b$ of log $R_{\bf l}$ is computed accordingly. 
+)
+
+
+
+
+
+% If $\tx$ passes all previous checks but fails the last one for up-front payment,
+% then the execution of $\tx$ will start but immediately fail because of such an exception,  
+% with the nonce $\sender{\tx}_n$ increased by one (unless the sender $\sender{\tx}$ is an empty account in the current world-state $\st$, i.e. $\mathsf{EMPTY}(\st,\sender{\tx})=\true$, when we prefer to keep it out of storage and the nonce $\sender{\tx}_n$ remains $0$)
+% and no refund of unused gas.
+% In particular the sender's balance $\sender{\tx}_b$ will be reduced by $v\eqdef\min\set{\st\left[\sender{\tx}\right]_b, \tx_p\tx_g}$ if $\tx$ does not get the subsidy for gas consumption; otherwise the {\bf sponsor balance for gas} of contract $C$ with address $\tx_a$ will be reduced by $v\eqdef\tx_p\tx_g$. 
+% %
+% \begin{align}
+% 	R_u=R'_u+v/\tx_p && R_{\bf l}=\emptystring && R_z=1 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+% \end{align}
+
+If $\tx$ passes all the above pre-execution checks, the execution of $\tx$ is as specified in the rest of this section.
+
+
+
+
+% The transaction $\tx$ can never be invalid from this point on, though it may fail in the execution.
+
+\subsection{Transaction Execution}
+
+The execution of the transaction $\tx$ transforms the world-state from $\st$ into $\st'\eqdef \Upsilon(\st,\tx)$ following the function $\Upsilon$ with the following steps.
+
+\subsubsection{Preprocessing}
+\label{subsubsec:preprocessing}
+
+In the preprocessing phase of $\tx$, the balance of $\sender{\tx}$ (and the sponsor, if applicable) is examined so that the payment for any further operation is assured.
+The world-state will be transformed from $\st$ into $\st^0\eqdef \st^{**}$ if $\tx$ passes the preprocessing, or directly into $\st'$ and the execution is aborted if $\tx$ fails at any step.
+
+\paragraph{Responsibility for not enough balance.} 
+If $\tx$ is calling a contract $\contract$, then Conflux first assumes that $\contract$ has unlimited
+{\bf sponsor balance for gas} and {\bf sponsor balance for collateral} and rehearses the
+preprocessing steps. If the rehearsal succeeds, then the contract $\contract$ is considered responsible for 
+possible \emph{not enough balance exception}. 
+Otherwise the sender $\sender{\tx}$ is responsible for it.
+If $\tx$ is calling a non-sponsored account, the sender is always responsible for \emph{not enough balance exception}.
+
+\paragraph{Nonce incremental.}
+The beginning of execution 
+causes an irrevocable changed to the state $\st$: 
+the nonce of the sender, $\sender{\tx}_n$, is incremented by one. 
+%
+We define the state $\st^*$:
+\begin{align}
+	\st^*  &\eqdef \st \qquad \mbox{  except:}\\
+	\st^*\left[\sender{\tx} \right]_n &\eqdef \st\left[\sender{\tx} \right]_n+1 
+\end{align}
+
+\paragraph{Up-front payment validation.}
+
+The up-front payment of a transaction $\tx$ consists of the gas fee $\tx_g\times\tx_p$ and the transferred value $\tx_v$, which is validated as follows.
+
+\begin{itemize}[nosep]
+	\item For value-transferring transaction $\tx$ where the recipient of $\tx$ is a normal account,
+	the balance of $\sender{\tx}$ should satisfy $\st^{*} \left[\sender{\tx}\right]_b \ge \tx_g\times\tx_p+\tx_v$ and otherwise a \emph{not enough balance exception} is generated. 
+	The world-state after the up-front payment is defined as: 
+	\begin{align}
+		\st^{**}  &\eqdef \st^* \qquad \mbox{  except:}\\
+		\st^{**} \left[\sender{\tx}\right]_b &\eqdef \max\set{\st^*\left[\sender{\tx}\right]_b-\tx_g\times\tx_p,0}
+	\end{align}
+
+	\item For transaction $\tx$ calling a contract $\contract$ where $\contract_p[{\sf gas}]_b$ and $\contract_p[{\sf limit}]$ denote the \textbf{sponsor limit for gas fee} and \textbf{sponsor balance for gas} of $\contract$:
+	\begin{itemize}
+		\item If $\sender{\tx}$ is not in the \textbf{whitelist} of $\contract$ or the claimed gas fee exceeds the sponsor limit for gas with $\tx_p\times \tx_g > \contract_p[{\sf limit}]$, then ${\tx}$ is not eligible for sponsorship on gas consumption.
+		The execution of $\tx$ fails and generates a \emph{not enough balance exception} if $\st^{*} \left[\sender{\tx}\right]_b<\tx_g\times\tx_p+\tx_v$.
+		The world-state after the up-front payment is defined as: 
+		\begin{align}
+			\st^{**}  &\eqdef \st^* \qquad \mbox{  except:} \label{eq:st after gas fee}\\
+			\st^{**} \left[\sender{\tx}\right]_b &\eqdef \max\set{\st^*\left[\sender{\tx}\right]_b-\tx_g\times\tx_p,0}
+		\end{align}
+
+
+		\item If $\sender{\tx}$ is in the \textbf{whitelist} of $\contract$ and $\tx_p\times \tx_g \le \min\set{\contract_p[{\sf gas}]_b,\contract_p[{\sf limit}]}$,
+		then the gas consumption of $\tx$ is sponsored.
+		The execution of $\tx$ may fail due to \emph{not enough balance exception} if and only if $\st^{*} \left[\sender{\tx}\right]_b<\tx_v$.
+		The world-state $\st^{**}$ after charging gas fee is as follows: 
+		\begin{align}
+			\st^{**}  &\eqdef \st^* \qquad \mbox{  except:}\\
+			\st^{**}\left[\contract_{addr}\right]_p[{\sf gas}]_b &\eqdef \st^*\left[\contract_{addr}\right]_p[{\sf gas}]_b-\tx_g\times\tx_p
+		\end{align}
+
+		\item Otherwise, when $\sender{\tx}$ is in the \textbf{whitelist} of $\contract$ and $\contract_p[{\sf gas}]_b< \tx_p\times \tx_g \le \contract_p[{\sf limit}]$,
+		$\tx$ is eligible for sponsorship on gas consumption but it is not sponsored because the contract balance is insufficient.
+		In this case, if the sender's balance affords the transferred value but not the whole up-front payment,
+		i.e. $\tx_v\le \st^{*} \left[\sender{\tx}\right]_b < \tx_g\times\tx_p+\tx_v$,
+		then the sender $\sender{\tx}$ is considered not responsible for the generated \emph{not enough balance exception} and the world-state is reverted to $\st^{**}\eqdef\st$. 
+		Note that in this specific case the sender's nonce $\st^{**}\left[\sender{\tx}\right]_n$ is reverted to $\st\left[\sender{\tx}\right]_n$ so that $\tx$ is reusable.
+		In other cases when the sender $\sender{\tx}$ is responsible for causing the \emph{not enough balance exception},
+		i.e. the sender's balance is either sufficient for the whole up-front payment or even less than the transferred value, 
+		the resultant world-state $\st^{**}$ will be the same as unsponsored case in (\ref{eq:st after gas fee}).
+	\end{itemize}
+\end{itemize}
+
+Thus,
+whenever the execution of $\tx$ fails and generates a \emph{not enough balance exception}, 
+there will be no further execution of $\tx$ and
+the resultant world-state would be $\st'\eqdef\st^{**}$. 
+The corresponding receipt is then composed as follows (where $R'$ refers to the receipt of last transaction):
+\begin{itemize}[nosep]
+	\item If sender $\sender{\tx}$ is responsible for the exception, i.e. $\st^{*} \left[\sender{\tx}\right]_b<\tx_g\times\tx_p+\tx_v$ when $\tx$ is not eligible for sponsorship or $\st^{*} \left[\sender{\tx}\right]_b<\tx_v$,
+	then the receipt of this execution will be 
+	\begin{align}
+		R_u=R'_u+\max\set{\st^*\left[\sender{\tx}\right]_b-\tx_g\times\tx_p,0} && R_{\bf l}=\emptystring && R_z=1 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+	\end{align}
+
+	\item Otherwise if sender $\sender{\tx}$ is not responsible for the exception,
+	i.e. when $\sender{\tx}$ is in the {\bf whitelist} of $\contract$ and
+	$\st^{*} \left[\sender{\tx}\right]_b\ge \tx_v$,
+	% $\tx_v\le \st^{*} \left[\sender{\tx}\right]_b < \tx_g\times\tx_p+\tx_v$,
+	% and $\contract_p[{\sf gas}]_b< \tx_p\times \tx_g \le \contract_p[{\sf limit}]$,
+	then the receipt will be
+	\begin{align}
+		R_u=R'_u && R_{\bf l}=\emptystring && R_z=2 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+	\end{align}
+\end{itemize} 
+
+
+
+
+
+%
+
+% \begin{align}
+% 	\st_0  &\eqdef \st^{**} \qquad \mbox{  except:}\\
+% 	\st_0 \left[\sender{\tx}\right]_b &\eqdef \begin{cases}
+% 		\st^{**} \left[\sender{\tx}\right]_b - \tx_v & \mbox{if $\st^{**} \left[\sender{\tx}\right]_b \ge \tx_v$}\\
+% 		\st^{**} \left[\sender{\tx}\right]_b & \mbox{otherwise}
+% 	\end{cases}
+% \end{align}
+% The gas available for the proceeding computation is $g\eqdef \tx_g-g_0$, where $g_0$ is the intrinsic cost of $\tx$ as defined in \cref{def:g0}.
+% Within this gas limit, \name executes the transaction depending on its type: either contract creation or message call.
+
+% In case the sender $\sender{\tx}$ doesn't have enough balance for value transfer, the transaction execution fails and $\st'\eqdef\st_0$. Let $R'$ be the receipt of last transaction, the receipt of current transaction will be 
+% \begin{align}
+% 	R_u=R'_u+\tx_g\times\tx_p && R_{\bf l}=\emptystring && R_z=1 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+% \end{align}
+
+\paragraph{Storage limit validation.}
+
+After the up-front payment validation, Conflux decides who is responsible for storage collateral. The storage limit $\ell$ is set to $\min\{\tx_l,2^{64}-1\}$.
+%
+If $\tx$ is calling a sponsored contract $\contract$ with $\ell\times 10^{18}/1024 \le \contract_p[{\sf col}]_b$ (where $\contract_p[{\sf col}]_b$ refers to the \textbf{sponsor balance for collateral} of $\contract$) and $\sender{\tx}$ in the \textbf{whitelist} of $\contract$, then contract $\contract$ is responsible for the storage collateral resulted in the execution of $\tx$ and will be the owner of modified entries. 
+%
+Otherwise, the sender $\sender{\tx}$ is the owner of modified entries
+and has the obligation to pay corresponding storage collateral.
+
+If $\sender{\tx}$ is the storage owner but his balance cannot afford the full collateral as declared in {\bf storageLimit}, 
+i.e. $\st^{**}[\sender{\tx}]_b<\ell\times 10^{18}/1024$, 
+then the execution of $\tx$ fails due to \emph{not enough balance exception}. The resultant world-state and receipt are defined as follows:
+
+\begin{itemize}
+	\item If ${\tx}$ is not eligible for sponsorship on storage collateral,
+	i.e. $\sender{\tx}$ not in the {\bf whitelist} of $\contract$,
+	then the resultant world-state is $\st'\eqdef\st^{**}$
+	and the receipt is as follows (where $R'$ refers to the receipt of last transaction):
+	\begin{align}
+		R_u=R'_u+\tx_g\times\tx_p && R_{\bf l}=\emptystring && R_z=1 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+	\end{align}
+
+	\item 
+	Otherwise if $\tx$ is eligible for sponsorship on storage collateral but neither $\contract$ nor $\sender{\tx}$ affords the cost of collateral as declared in the {\bf storageLimit} $\tx_\ell$,
+	the resultant world-state is reverted to $\st'\eqdef\st$ and the receipt is as below:
+	\begin{align}
+		R_u=R'_u && R_{\bf l}=\emptystring && R_z=2 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+	\end{align}
+\end{itemize}
+%
+
+
+
+% In the following, the storage owner $i$ refers the payer for storage collateral. It should be one of $\tx_t$ or $\sender{\tx}$. 
+
+\subsubsection{Execution Substate}
+\label{subsubsec:substate}
+
+% We accure the intermediate states 
+The \emph{transaction substate} $A$ is a five tuple which accrues intermediate information during execution. 
+\begin{align}
+	A\eqdef \left( A_{\bf s}, A_{\bf l}, A_{\bf t}, A_{\bf o}, A_{\bf e}\right)
+\end{align}
+The components of $A$ are defined as follows: 
+\begin{itemize}[nosep]
+	\item $A_{\bf s}$ is the self-destruct set of accounts that will be discarded upon the transaction's completion.
+
+	\item $A_{\bf l}$ is the log series consisting of indexable ``checkpoints'' in the VM code execution, allowing light clients to track the execution of a contract.
+
+	\item $A_{\bf t}$ is the set of touched accounts, of which the empty ones will be deleted on the transaction's completion.
+
+	\item $A_{\bf o}$ is the list of storage collateral occupation.
+	
+	\item $A_{\bf e}$ is the list of storage collateral release.
+	% It is left for compatibility though not activated in our current version.
+\end{itemize}
+
+The empty substate $A^0$, which is also the initial substate, has no self-destructs, no logs, no touched accounts, and zero refund. Formally, $A^0$ is defined as
+\begin{align}
+	A^0\eqdef \left( \emptyset, \emptystring, \emptyset, \emptystring,\emptystring\right)
+\end{align}
+
+
+\subsubsection{Type dependent execution}
+
+If transaction passes the preprocessing, 
+then {\name} evaluates the \emph{post-execution provisional state} $\st^P$ from \emph{pre-execution provisional state} $\st^0$ depending on the transaction type as specified in $\tx_a$: either contract creation or message call. 
+%
+The gas available for the proceeding computation is $g\eqdef \tx_g-g_0$, where $g_0$ is the intrinsic cost of $\tx$ as in (\ref{def:g0}). 
+
+We define the tuple of post-execution provisional state $\st^{P}$, remaining gas $g'$, accrued substate $A$ and status code $z$:
+\begin{align}\label{def:transform}
+	(\st^{P},g',A,z)\eqdef
+	\begin{cases}
+		\creation(\st^0,\st^0,\sender{\tx},\sender{\tx},i,g,\tx_p,\tx_v,\tx_{\bf i},0,\top) &  \tx_t=\emptyset \\
+		\execution(\st^0,\st^0,\sender{\tx},\sender{\tx},i,\tx_t,\tx_t,g,\tx_p,\tx_v,\tx_v,\tx_{\bf d},0,\top) & \tx_t\neq\emptyset
+	\end{cases}
+\end{align}
+%
+where $i$ is the address paying for storage collateral decided in preprocessing. Notice that we have two more parameters at the second and the fifth positions compared with Ethereum. 
+
+The specifications of function $\creation$ and $\execution$ are given in Section~\ref{sec:creation} and Section~\ref{sec:execution} respectively.
+
+\subsubsection{Postprocessing}
+
+% \paragraph{Check execution result.}
+
+% If $z=1$, it means the execution fails and the state will be reverted to $\st_0$. Let $R'$ be the receipt of last transaction, the receipt of current transaction will be 
+% \begin{align}
+% 	R_u=R'_u+\tx_g\times\tx_p && R_{\bf l}=\emptystring && R_z=1 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+% \end{align}
+
+\paragraph{Storage collateral refund and charge.}
+
+After the message call or contract creation is processed, Conflux checks whether the incremental storage exceeds storage limit specified in $\tx_\ell$ and if the storage owner has enough balance for storage collateral. 
+Let $v$ be the available balance to pay for storage collateral, which is defined as 
+\begin{align}
+	v \eqdef \begin{cases}
+		\st^{P}[i]_b & \mbox{if $i=\sender{T}$} \\
+		\st^{P}[T_t]_p[{\sf col}]_b &  \mbox{if $i=T_t$}
+	\end{cases}
+\end{align}
+%
+Let $\st^{P}[i]_o-\st^0[i]_o$ be the incremental storage collateral during execution.
+If $\st^{P}[i]_o-\st^0[i]_o>\min\{v,\ell\times 10^{18}/1024\}$, then the execution fails because of exceeding the storage limit, 
+and all the modified state will be reverted to $\st^0$, 
+i.e. $\st'\eqdef\st^0$. 
+Let $R'$ denote the receipt of last transaction.
+Then the receipt of current transaction $\tx$ will be 
+\begin{align}
+	R_u=R'_u+\tx_g\times\tx_p && R_{\bf l}=\emptystring && R_z=1 && R_{\bf o}=\emptystring && R_{\bf i}=\emptystring
+\end{align}
+
+Otherwise \name charges and refunds storage collateral and transforms world-state $\st^P$ into $\st^*$. 
+We skim the self-destructed contracts here because their storage collateral have been refunded during self-destruction. 
+
+\begin{align}
+	&\st^*  \eqdef \st^{P} \qquad \mbox{  except:}\\
+	&\forall a \in \B_{160} \text{ with } \st^{P}[a]\neq\emptyset\text{ and }a\notin A_{\bf s} \\
+	&\quad \begin{cases}
+	\st^*[a]_p[{\sf col}]_b \eqdef \st^{P}[a]_p[{\sf col}]_b - \left(\st^{P}[a]_o-\st^0[a]_o\right) & \mbox{if $a$ refers to a contract account, i.e. $\mathsf{Type}_{a}=\typecontract$} \\
+	\st^*[a]_b \eqdef \st^{P}[a]_b - \left(\st^{P}[a]_o-\st^0[a]_o\right) & \mbox{if $a$ refers to a normal account, i.e. $\mathsf{Type}_{a}= \typenormal$}
+	\end{cases}
+\end{align}
+
+\paragraph{Gas fee refund.}
+
+The \emph{refundable amount of gas} $g^{\dagger}$ is the minimum of the \emph{legitimately remaining gas} $g'$ (as calculated in (\ref{def:transform})) and a quarter of the \textbf{gasLimit} of $\tx$,
+	i.e. $g^{\dagger}\eqdef \min\set{g', \tx_g/4}$.
+The refund of gas fee is applied on world-state $\st^{*}$ and results in $\st'\eqdef \Upsilon(\st,\tx)$.
+
+\begin{align}
+	& \st'  \eqdef \st^* \qquad \mbox{  except:}\\
+	& \quad \begin{cases} 
+		\st'\left[\contract_{addr}\right]_p[{\sf gas}]_b \eqdef \st^*\left[\contract_{addr}\right]_p[{\sf gas}]_b+g^{\dagger}\times \tx_p 
+		& \mbox{if contract $\contract$ paid the gas fee}\\
+		\st' \left[\sender{\tx}\right]_b \eqdef \st^*\left[\sender{\tx}\right]_b + g^{\dagger}\times \tx_p 
+		& \mbox{if the sender paid the gas fee}
+	\end{cases} 
+\end{align}
+
+% \begin{itemize}[nosep]
+% 	\item In case the contract $\contract$ paid the gas fee, the remained gas will refunded to {\bf sponsor balance for gas} of $\contract$:
+% 	\begin{align}
+% 		\st'  &\eqdef \st^* \qquad \mbox{  except:}\\
+% 		\st'\left[\contract_{addr}\right]_p[{\sf gas}]_b &\eqdef \st^*\left[\contract_{addr}\right]_p[{\sf gas}]_b+g^{\dagger}\times \tx_p
+% 	\end{align}
+
+% 	\item otherwise, the leftover gas will refunded to sender $\sender{\tx}$'s balance:
+% 	\begin{align}
+% 		\st'  &\eqdef \st^* \qquad \mbox{  except:}\\
+% 		\st' \left[\sender{\tx}\right]_b &\eqdef \st^*\left[\sender{\tx}\right]_b + g^{\dagger}\times \tx_p
+% 	\end{align}
+% \end{itemize}
+
+\paragraph{Transaction Receipt.} 
+
+Now the transaction execution is accomplished.
+The returning status code $z$ denotes whether the execution succeeds or not. 
+Supposing that $R'$ is the receipt of last transaction, 
+the receipt of current transaction will be as follows:
+\begin{align}
+	R_u=R'_u+(\tx_g-g^{\dagger})\times\tx_p && R_{\bf l}=A_{\bf l} && R_z=z && R_{\bf o}=\mathsf{Agg}(A_{\bf o}) && R_{\bf i}=\mathsf{Agg}(A_{\bf i})
+\end{align}
+%
+where $\mathsf{Agg}(\cdot)$ refers to aggregating the list of key/value pairs into groups by keys, taking the summation of values for each group and sort the results in ascending order of keys.
+
+
+% \guangsays{After the message call or contract creation is processed, shall we refund the sender for self-destructed accounts?}
+% In the current version: NO.
+% In later version: change the economic model to charge storage with inflation.
+
+\subsection{Contract Creation}
+\label{sec:creation}
+
+A number of intrinsic parameters are used when creating a smart contract account:
+\begin{itemize}[nosep]
+	\item world-state ${\st}$;
+	
+	\item original world-state $\tilde{\st}$;
+
+	\item sender $s$;
+
+	\item original sender $o$;
+	
+	\item storage owner $i$;
+		
+	\item available gas $g$;
+
+	% \item storage limit $\ell$;
+
+	\item gas price $p$;
+
+	\item endowment $v$;
+
+	\item initialization code $\vec{i}$ as an arbitrary length byte array;
+
+	\item the present depth of message-call/contraction-creation stack $e$;
+
+	\item the salt for new account's address $\zeta$,\\
+	where $\zeta = \varnothing$ if the creation was caused by {\hyperlink{create}{$\op{CREATE}$}}, 
+	and $\zeta\in \B_{256}$ if the creation was caused by {\hyperlink{create2}{$\op{CREATE2}$}};
+
+	\item and finally the permission to change the state $w$.
+\end{itemize}
+
+
+We define the contract creation function by $\creation$,
+which evaluates from the above parameters and modifies the state $\st$ to a new state $\st'$, together with the leftover gas $g'$, the accrued substate $A$, the result of creation, and the output $\vec{o}$. 
+\begin{align}
+	\left(\st',g', A, z, \vec{o} \right)\eqdef \creation\left(\st,\tilde{\st}, s, o, i, g, p, v, \vec{i}, e, w \right)
+\end{align}
+
+
+The address $a$ of the account $\account$ newly created by {\hyperlink{create}{$\op{CREATE}$}} is defined as the $4$-bit contract type indicator concatenating the rightmost $156$ bits (i.e. the $100$-th to $255$-th bit) of the Keccak hash of a zero byte, the sender address $s$, the little-endian 32-byte array of its account nonce and the Keccak hash of \cvm code. 
+% 
+For {\hyperlink{create2}{$\op{CREATE2}$}} the rule is slightly different by substituting account nonce with the salt $\zeta$ and changing the leading byte before taking Keccak (following EIP-1014).
+Combining these two cases, 
+the resultant address for the new contract account $\account$ is defined as follows:
+\begin{align}\label{eq:new-address}
+	a= A(s, \st[s]_{n} - 1, \zeta, \vec{i}) \eqdef 
+	\left\{\begin{array}{l l l l l}
+	 	\typecontract \circ \kec\big([\mathrm{00}]_{16} &~\circ~ s &\circ~ \mathrm{LE}_{32}(\st[s]_n-1) &\circ~ \kec(\vec{i}) \big)[100 \dots 255]
+	 	& \text{if}\ \zeta = \varnothing \\
+	 	\typecontract \circ \kec\big([\mathrm{ff}]_{16} &~\circ~ s &\circ~  \zeta   &\circ~ \kec(\vec{i}) \big)[100 \dots 255] 
+		& \text{otherwise}
+	\end{array} \right.
+\end{align}
+where $\mathrm{LE}_{32}(\cdot)$ denotes the function that expands an integer value in $[0,2^{256}-1]$ to a little-endian 32-byte array. 
+%
+Note that we use $\st[s]_n-1$ since it is indeed the sender's nonce at the generation of the respective transaction or VM operation. 
+
+If $\st[a]\neq \emptyset$, a \emph{Contract Address Conflict} exception is triggered. Function $\creation$ returns $(\emptyset,g,A^0,1,\emptyset)$ immediately. 
+
+Otherwise, the account's nonce is initialized to one, the balance as the value passed by the contract creation transaction,
+the storage and code as for the empty string.
+The sender's balance is reduced by the transferred value (there must be enough balance or the transaction will not be executed).
+Thus the mutated state becomes $\st^*$:
+\begin{align}
+	\st^* & \eqdef \st \qquad{ \text{except:}}\\
+	\st^*[a] &\eqdef \account^0 \quad\text{except:}\; \st^*[a]_n=1 \wedge \st^*[a]_b=v \wedge \st^*[a]_a=s \wedge \st^*[a]_w=i\\
+	% \left(a, \account_{state}\right)\\
+	\st^*[s] &\eqdef \begin{cases}
+		\emptyset & \mbox{if $\st[s]=\emptyset$ $\land$ $v=0$}\\
+		\st[s]\quad\mbox{except}:	\st^*[s]_b=\st[s]_b-v	& \mbox{otherwise}
+	\end{cases}
+\end{align}
+where $\account^0$ is the default account specified in~\cref{eq:default_acc}. 
+
+The unmentioned components of an account are initialized by default.
+
+Finally the account $\account$ is initialized by \cvm code $\vec{i}$ according to the execution model.
+Code execution may effect several events that are not internal to the execution state:
+the account's storage can be altered, further accounts can be created and further messages calls can be made.
+As such, the code execution function $\execute$ evaluates to a tuple of resultant state $\st^{**}$, available gas remaining $g^{**}$, the accrued substate $A$ and the body code $\vec{o}$.
+\begin{align}
+	\left(\st^{**}, g^{**},  A, \vec{o} \right) \eqdef \execute\left(\st^*, g, I\right)
+\end{align}
+where $I$ consists of the parameters of the execution environment as follows:
+\begin{align}
+	I_a &\eqdef a\\
+	I_o &\eqdef o\\
+	I_i &\eqdef i\\
+	I_p &\eqdef p\\
+	I_\vec{d} &\eqdef \emptystring\\
+	I_s &\eqdef s\\
+	I_v &\eqdef v\\
+	I_\vec{b} &\eqdef \vec{i}\\
+	I_{\head} & \eqdef \head \\
+	I_e &\eqdef e\\
+	I_w &\eqdef w\\
+	I_\st & \eqdef\tilde{\st}
+\end{align}
+
+$I_{\vec{d}}$ evaluates to the empty tuple as there is no input data to this call. 
+$I_{\head}$ is the block header of the present block.
+
+Code execution depletes gas, and gas may not go below zero, thus the actual execution may exit before the code has come to a natural halting state.
+In this (and several other) exceptional cases we say an out-of-gas (OOG) exception has occurred:
+the evaluated state is set to the empty set $\emptyset$, 
+and the entire contract creation should have no effect on the state, effectively leaving it as it was immediately prior to the attempt of the failed creation.
+
+
+If the initialization code completes successfully,
+a final storage cost is charged for depositing the code.
+The storage cost $s$ is proportional to the code size of the created contract and it consists of two parts:
+\begin{itemize}
+	\item the code-deposit cost $d$ charged as gas consumption:
+	\begin{align}
+		d \eqdef   |\vec{o}| \times G_{codedeposit}
+	\end{align}
+
+	\item the collateral for storage $c$ (measured in \unit) that will be locked during the lifetime of the created contract (Conflux will record the owner of code in world-state and refund the collateral when the contract is destroyed):
+	\begin{align}
+		c \eqdef   \frac{10^{18}}{\storagebytepertoken} \times |\vec{o}|
+	\end{align}
+\end{itemize}
+
+
+
+If the remaining gas cannot afford the code-deposit cost, i.e. $g^{**}<d$, then we also declare that an out-of-gas exception occurs and handle it as a failed contract creation attempt.
+% If the sender $s$ (or contract $\contract$ in case this contract creation is eligible for the sponsorship for collateral from $\contract$) cannot afford the collateral $c$,
+% i.e. $\ell^{**}<c$ or $\st^{**}[s]_b < c$
+% (or $\st^{**}[\contract]_{\textbf{sponsor balance for collateral}} <c$ respectively), 
+% the contract creation fails.
+%
+% The contract creation also fails when the contract address has appeared in state $\st$ before creation ($\st^*[a]\neq\emptyset$). 
+
+
+
+If the contract creation fails for any reason, the value of the transaction is not transferred to the aborted contract, and collateral for storing the code is not locked either.
+Thus we formally specify the resultant state, gas, storage limit, substate, and status code by $\left(\st', g', A, z\right)$ as follows:
+\begin{align}
+	g' &\eqdef \begin{cases}
+		0 & \mbox{if $F$}\\
+		g^{**}-d & \mbox{otherwise}
+	\end{cases} \\
+	% \ell' &\eqdef \begin{cases}
+	% 	\ell^{**} & \mbox{if $F$}\\
+	% 	\ell^{**}-c & \mbox{otherwise}
+	% \end{cases} \\
+	\st' &\eqdef 
+	\begin{cases}
+		\st 	 	& \mbox{if $F$}\\
+		% \st^{**} 	\mbox{ except:} 
+		% \; \st'[a] = \emptyset & \mbox{if $\mathsf{DEAD}(\st^{**},a)$}\\
+		\st^{**} 	\mbox{ except:} 
+		\; \st'[a]_c = \kec(\vec{o})\;\land\; \st'[i]_o=\st^{**}[i]_o+c& \mbox{otherwise}
+	\end{cases}\\
+	z &\eqdef 
+	\begin{cases}
+		1	 	& \mbox{if $F$}\\
+		0	 	& \mbox{otherwise}
+	\end{cases}
+\end{align}
+where $F\eqdef\left( \left(\st^{**}=\emptyset \land \vec{o}=\emptyset \right)\;\lor\; g^{**}<d \;\lor\;|{\bf o}|>24576 \right)$
+denotes the event that the contract creation attempt fails.
+
+In the determination of $\st'$, the final body code for the newly created account is specified by the byte sequence $\vec{o}$ derived from the execution of the initialization code $\vec{i}$.
+The status code $z$ is an indicator of whether the contract creation succeeds.
+
+Therefore the result of contract creation is either a successfully created new contract with its endowment and collateral for storage, or no new contract and no transfer of value or collateral at all.
+
+\paragraph{Subtleties.} 
+Note that while the initialization code is executing, the newly created address exists but with no intrinsic body code. 
+Thus any message call received by it during this time causes no code to be executed. 
+If the initialization execution ends with a $\op{SELFDESTRUCT}$ instruction, the matter is moot since the account will be deleted before the transaction is completed. 
+For a normal $\op{STOP}$ code, or if the code returned is otherwise empty, then the world-state may left with a zombie account. Only the administrator of such contract can destroy it by calling the internal contract described in \cref{sec:admin}.
+
+
+
+\subsection{Message Call}\label{sec:execution}
+The following intrinsic parameters are used when executing a message call:
+\begin{itemize}[nosep]
+	\item world-state ${\st}$;
+
+	\item original world-state $\tilde{\st}$;
+
+	\item sender $s$;
+
+	\item original sender $o$;
+
+	\item recipient $r$;
+	
+	\item storage owner $i$
+
+	\item the account $c$ whose code is to be executed, usually the same as recipient; 
+
+	\item available gas $g$;
+
+
+	% \item storage limit $\ell$
+
+	\item gas price $p$;
+
+	\item value $v$;
+
+	\item input data $\vec{d}$ of the call, as an arbitrary length byte array;
+
+	\item the present depth of message-call/contraction-creation stack $e$;
+
+	\item and finally the permission to change the state $w$.
+\end{itemize}
+
+During the execution of message calls, 
+the state and transaction substate may change,
+and finally an output data array $\vec{o}$ will be generated.
+In case of executing transactions (generated by external controllers) the output data $\vec{o}$ is ignored, however message calls (generated by internal execution process) can result further consequences due to the execution of VM-codes, especially when the message call is generated inside the execution of another message call (or transaction).
+\begin{align}
+  	\left(\st', g', A, z, \vec{o} \right) \eqdef \execution\left(\st, \tilde{\st},s,o,r,i,c,g, p,v,\tilde{v},\vec{d},e,w \right)
+\end{align}  
+Note that we differentiate between the value to be transferred, $v$, from the value apparent in the execution context, $\tilde{v}$, for the $\op{DELEGATECALL}$ instruction.
+
+We let $\st^*$ denote the first transitional world-state, which is the same as the original state except for the value transferred from sender $s$ to recipient $r$ (if $s\ne r$):
+\begin{align}
+	\st^*[r]_b\eqdef \st[r]_b+v \qquad \land  \qquad\st^*[s]_b\eqdef \st[s]_b-v
+	\label{state:first transitional}
+\end{align}
+
+In particular, if $\st[r]$ was undefined in $\st$, \name will treat it as an empty account with address $r$ which has no code or state and zero balance and nonce.
+If furthermore the transferred value $v$ is positive, the account will be created and stored in $\st^*[r]$. 
+Thus the previous equation should be taken to mean:
+\begin{align}
+	\st^* &\eqdef \st \qquad \mbox{except:}\\
+	\st^*\left[ s \right] &\eqdef \begin{cases}
+		\emptyset & \mbox{if $\st[s]=\emptyset$ $\land$ $v=0$}\\
+		\st[s]\quad\mbox{except:}\st^*[s]_b=\st[s]_b-v & \mbox{otherwise}
+	\end{cases}\\
+% \end{align}
+% \begin{align}
+	% \mbox{and}\qquad \st'_1 &\eqdef \st \qquad \mbox{except:}\\
+	\st^*[r] &\eqdef \begin{cases}
+		\account^0 \quad\text{except:}\; \st^*[r]_b=v  & \mbox{if $\st[r]=\emptyset \;\land\; v\ne 0$}\\
+		\emptyset & \mbox{if $\st[r]=\emptyset \;\land\; v = 0$}\\
+		\st[r]\quad\mbox{except:}\st^*[r]_b=\st[r]_b+v\; & \mbox{otherwise}
+	\end{cases}
+\end{align}
+
+The recipient's associated code $\vec{b}$, whose Keccak hash is $\st[r]_c$, is executed according to the execution model if the re-entrance protection is not triggered as in Section~\ref{subsubsec:reentrance}.
+Note that the pair $\left( \kec(\vec{b}), \vec{b} \right)$ must be stored at some previous point, i.e. at the last update of the code hash $\st[r]_c$ of the recipient's account. 
+Thus $\vec{b}$ can be efficiently determined from $\st[r]_c$,
+and it is unique following the collision resistance of $\kec$.
+
+Similar as with contract creation, if the execution halts due to an exception, then the state is reverted to the point immediately prior to balance transfer (i.e. $\st$) of the message call but no gas is refunded.
+The new state $\st'$ after executing this message call is as follows:
+\begin{align}
+	\st' &\eqdef 
+	\begin{cases}
+		\st 	 	& \mbox{if $\st^{**}=\emptyset$}\\
+		\st^{**} 	& \mbox{otherwise}
+	\end{cases}\\
+	g' & \eqdef 
+	\begin{cases}
+		0 & \mbox{if $\st^{**} =\emptyset$ $\land$ $\vec{o}=\emptyset$}\\
+		g^{**} & \mbox{otherwise}	
+	\end{cases}\\
+	% \ell' & \eqdef 
+	% \begin{cases}
+	% 	\ell & \mbox{if $\st^{**} =\emptyset$}\\
+	% 	\ell^{**} & \mbox{otherwise}	
+	% \end{cases}\\
+	z &\eqdef 
+	\begin{cases}
+		1	 	& \mbox{if $\st^{**}=\emptyset$}\\
+		0	 	& \mbox{otherwise}
+	\end{cases}
+\end{align}
+where the resultant state $\st^{**}$ and available gas remaining $g^{**}$, together with the accrued substate $A$ and the output data $\vec{o}$, 
+are determined by the code execution function $\execute$ evaluated on state $\st^*$.
+\begin{align}
+	\left(\st^{**}, g^{**},  A, \vec{o} \right) \eqdef \execute \left(\st^*, g, I  \right)
+\end{align}
+where $I$ contains the parameters of the execution environment as follows:
+\begin{align}
+	I_a &\eqdef r\\
+	I_o &\eqdef o\\
+	I_i &\eqdef i\\
+	I_p &\eqdef p\\
+	I_\vec{d} &\eqdef \vec{d}\\
+	I_s &\eqdef s\\
+	I_v &\eqdef \tilde{v}\\
+	I_\vec{b} &\eqdef \vec{b}\\
+	I_{\head} & \eqdef \head \\
+	I_e &\eqdef e\\
+	I_w &\eqdef w\\	% I_\vec{b} \;\; &\text{such that }  \kec\left(I_\vec{b}\right)  = \st[r]_c
+	I_\st & \eqdef\tilde{\st}
+\end{align}
+
+
+
+
+For the frequently used functionalities such as the elliptic curve public key recovery, the SHA2-$256$ hash scheme, and so on, we set up eight ``precompiled contracts'' with reserved recipient's address $r\in\set{1,2,\dots,8}$ (with type indicator $\typereserved$).
+In the present implementation of \name these exceptional contracts are specified as in the latest version of Ethereum \cite{ETH_yellow}.
+
+% \subsubsection{Receipt after execution}\label{sec:exec_receipt}
+
+% After a contract creation or message call, we compute the receipt $R$ based on the output $(\st',g',l',{\sf o}, z)$. Unlike Ethereum, Conflux no long refunds any gas for storage released or contract destructed. Instead, Conflux will refund at most $\tx_g/4$ unused gas. So the gas used by transaction $\tx$ equals to $g^{*}=\max\{3\tx_g/4,T_g-g'\}$. Let $R'$ be the receipt of last transaction, we compute several components in receipt as
+% %
+% \begin{align}
+% 	R_u=R'+g^{*} && R_{\bf l}=A'_{\bf l} && R_z=z
+% \end{align}
+
+% Then Conflux collects all the items in $A_{\bf o}$ and $A_{\bf i}$ which represent the incremental storage usage and decremental storage usage respectively. For each address $\alpha$ appearing in $A_{\bf o}$ or $A_{\bf i}$, let $n_{\sf o}$ collects the sum of storage incremental for address $\alpha$ in $A_{\bf o}$, $n_{\bf i}$ collects the sum of storage decremental for address $\alpha$ in $A_{\bf i}$. If $n_{\bf o}>n_{\bf i}$, Conflux append $(\alpha,n_{\bf o}-n_{\bf i})$ to $R_{\bf o}$. If $n_{\bf o}<n_{\bf i}$, Conflux append $(\alpha,n_{\bf i}-n_{\bf o})$ to $R_{\bf i}$. All the items in $R_{\bf o}$ and $R_{\bf i}$ are sorted in ascending of address. 
+
+\subsubsection{Re-entrance Protection}
+\label{subsubsec:reentrance}
+
+When calling a contract, {\name} virtual machine makes sure that re-entrance attack is impossible by invalidating codes to be executed in re-entrance calls.
+
+To be specific, the {\name} virtual machine maintains a call stack and 
+invalidates the code execution  
+when the callee is already in the call stack but different from the caller before executing the code invoked by each message call.
+By requiring that the callee being different from the caller, it is still allowed to call and execute other functions in the caller's contract.
+Because in such cases the developer should be able to fully anticipate the execution flow
+and we do not consider it necessary to trigger the re-entrance protection.
+
+If the message call is indeed re-entering some other contract in the call stack,
+the re-entrance protection is triggered 
+such that the callee's code is invalidated in this message call 
+and a ``reentrancy'' exception is generated.
+However, we remark that after returning from the re-entrance call,
+the changes on consumed gas and transferred value are not reverted, i.e. the state is reverted to the first transitional world-state $\st^{*}$ as in (\ref{state:first transitional}).
+Here the value transfer is not reverted since it is necessary in some cases, 
+e.g. withdrawing \cfx from a contract when the transfer has to happen via a re-entrance call.
+
+
+
+
+
+
+
+
+\subsection{Execution Model}
+\label{sec:exe model}
+
+The execution model specifies the system state transition on input of a sequence of bytecode instructions and a small tuple of environmental data. 
+The state transition function is formalized as a virtual state machine,
+which 
+% This virtual machine 
+is Turing-complete except that its running time and storage space is intrinsically bounded by the limited amount of available gas and collateral for storage.
+% 
+For this moment we implement the well-known Ethereum Virtual Machine (EVM), and the execution model follows \cite{ETH_yellow}.
+
+
+\subsubsection{Basics}
+
+The \cvm is a stack-based architecture with $256$-bit word size.
+The stack has a maximum size of $1024$ words.
+The memory model is a simple word-addressed byte array.  
+The machine also has an independent storage model which is a word-addressable word array (rather than byte array for the memory). 
+The memory is volatile and storage is steady and maintained as part of the system state. 
+All locations in both memory and storage are initialized as zero.
+The program code is stored separately in a virtual ROM that is only interactable via specific instructions.
+
+The execution of the virtual machine may reach exceptions for various reasons, including stack underflows/overflow, invalid instruction, invalid jump destination, out-of-gas and so on.
+Like the out-of-gas exception, the machine halts immediately and throws an exception to the execution agent, either the transaction processor or recursively the spawning execution environment, which will catch and deal with it separately. 
+
+
+
+\subsubsection{Gas Consumption}
+
+The cost of execution, aka. \emph{gas}, is charged under following circumstances:
+\begin{enumerate}[nosep]
+	\item the execution of instructions, where each type of instructions is assigned an intrinsic amount of gas;
+
+	\item the generation of subordinate message call or contract creation.
+
+	% \item \oldversion{the increase in the memory usage.}
+	% \guangsays{Why the storage of contract code is not charged by the staking mechanism?}}
+\end{enumerate}
+
+
+\subsubsection{Storage Consumption}
+	\label{subsec:storage consumption}
+
+	\name requires a fixed amount of fund, i.e. \sunitprice, locked as collateral during the whole lifetime of each \sunitsize storage entry in the world-state.
+	This fund is locked when the entry is created, and is unlocked and returned to the owner when that entry is cleared or overwritten by someone else eventually, as described in Section~\ref{sec:collateral}.
+	The interest generated by the collateral is paid to miners as specified in Section~\ref{subsec:storagefee}. 
+	Thus the cost of storing an entry  
+	is proportional to the time length of storage usage.
+
+	
+	The owner of the collateral of a storage entry, 
+	which is called ``the owner of that entry'' for simplicity, 
+	essentially records who has written the latest content of that entry.
+	Normally the initial owner of an entry should be the sender of the transaction that causes the creation of this entry. 
+	However, in case a contract provides the collateral on behalf of the sender, the owner will be that contract instead (see Section~\ref{sec:sponsor} for details).
+	When a storage entry is modified in the execution of a transaction,
+	the ownership of this entry is changed,
+	and the old owner's collateral for that entry is replaced by the new owner's collateral.
+
+
+	If a storage entry is cleared from the world-state,
+	then the corresponding collateral is unlocked and returned to the owner of that entry.
+	We remark that there is no refund to the actor who causes the clearance, 
+	which is distinct from the gas refunding policy in Ethereum \cite{ETH_yellow}.
+	Furthermore, to ensure that unlocked collateral for storage is always returned properly, 
+	\name does not allow destructing any smart contract with non-zero collateral for storage.
+
+
+	During the execution of a transaction $\tx$, the total incremental in storage usage cannot exceed $\tx_\ell$ as specified in the \textbf{storageLimit} field of $\tx$.
+	In case more storage space is required, the execution of $\tx$ would fail.
+
+	More details about collateral for storage is explained in Section~\ref{sec:collateral}.
+
+
+\subsubsection{Execution Environment}
+\label{subsubsec:exe_env}
+Besides the global system state $\st$ and the amount of remaining gas $g$, 
+the execution agent must provide the following important information used in the execution environment, as contained in the tuple $I$:
+\begin{itemize}[nosep]
+	\item $I_a$, the address of the account which owns the code that is executing.
+	
+	\item $I_o$, the address of the original sender who originated this execution.
+	
+	\item $I_i$, the address of the storage owner.
+
+	\item $I_p$, the gas price designated by the transaction that originated this execution.
+
+	\item $I_{\vec{d}}$, the byte array that is the input data to this execution; in case the execution agent is a transaction $\tx$, this would be the transaction data $\tx_{\vec{d}}$.
+
+	\item $I_s$, the address of the account that invoked the code; in case the execution agent is a transaction $\tx$, this would be the transaction sender's address $\sender{\tx}$.
+
+	 \item $I_v$, the value, in \unit, passed to the recipient's account; in case the execution agent is a transaction $\tx$, this would be the transaction value $\tx_v$.
+
+	 \item \linkdest{I__b}{$I_{\vec{b}}$}, the byte array of the machine code to be executed.
+
+	 \item $I_{\head}$, the block header of the present block.
+
+	 \item $I_e$, the depth of the current message-call or contract-creation in the stack.
+
+	 \item $I_w$, the permission to make modifications to the state.
+
+	 \item $I_\st$, the original world-state right before this execution.
+\end{itemize}
+
+The state transition is defined by the execution function $\execute$, which takes as input the current world-state $\st$, the amount of gas $g$, 
+and the input $I$ as defined above,
+and outputs the resultant state $\st'$, the remaining gas $g'$, the accrued substate $A$ and the resultant output $\vec{o}$.
+Formally, we define it as follows:
+\begin{align}
+	\left( \st', g', A, \vec{o} \right) \eqdef \execute\left(\st,g, I\right)
+\end{align}
+where we recall that the accrued state $A$ consists of the selfdestructs set $A_\vec{s}$, the log series $A_\vec{l}$, the touched accounts $A_\vec{t}$, a series of addresses recording the owners of storage occupation $A_\vec{o}$ and a series of addresses recording the owners of storage release $A_\vec{e}$
+(as described in Section~\ref{subsubsec:substate}):
+\begin{align}
+	A\eqdef\left(A_\vec{s},A_\vec{l},A_\vec{t},A_\vec{o},A_\vec{e} \right)
+\end{align}
+% Note that in the current version there is no refund for destructing contracts or accounts,
+% except for the released collateral for storage. 
+
+
+\subsubsection{Execution Overview}
+
+The $\execute$ function is defined mostly following the Ethereum yellowpaper \cite{ETH_yellow}, except for a few instructions. 
+For self-sufficiency we explain the definition of $\execute$ briefly.
+
+In most practical implementations $\execute$ will be modeled as an iterative progression of the pair $(\st,\mst)$ comprising the world-state and the machine state. 
+Formally, it can be recursively defined with a function $X$. This uses an iterator function $O$ (which defines the result of a single cycle of the state machine) together with functions \hyperlink{zhalt}{$Z$}, which determines if the present state is an \hyperlink{zhalt}{exceptional halting} state of the machine, and \hyperlink{hhalt}{$H$}, specifying the output data of the instruction if and only if the present state is a \hyperlink{hhalt}{normal halting} state of the machine.
+
+Recall that the empty sequence, denoted by $\emptystring$, is not equal to the empty set, denoted by $\emptyset$; this is important when interpreting the output of $H$, which evaluates to $\emptyset$ when execution is to continue but a series (potentially empty) when execution should halt.
+\begin{eqnarray}
+\execute(\st, g, I) & \eqdef & (\st'\!, \mst'_{\mathrm{g}}, A, \mathbf{o}) \\
+(\st', \mst'\!, A, ..., \mathbf{o}) & \eqdef & X\big((\st, \mst, A^0\!, I)\big) \\
+\mst_{\mathrm{g}} & \eqdef & g \\
+\mst_{\mathrm{pc}} & \eqdef & 0 \\
+\mst_{\mathbf{m}} & \eqdef & (0, 0, ...) \\
+\mst_{\mathrm{i}} & \eqdef & 0	\\
+\mst_{\mathbf{s}} & \eqdef & \emptystring \\
+\mst_{\mathbf{o}} & \eqdef & \emptystring	\\
+\mst_{\mathbf{r}} & \eqdef & \emptystring
+\end{eqnarray}
+\begin{equation} \label{eq:X-def}
+X\big( (\st, \mst, A, I) \big) \eqdef \begin{cases}
+\big(\varnothing, \mst, A^0, I, \varnothing\big) & \text{if} \quad Z(\st, \mst, I) \\
+\big(\varnothing, \mst', A^0, I, \mathbf{o}\big) & \text{if} \quad w =  \op{REVERT} \\
+O(\st, \mst, A, I) \cdot \mathbf{o} & \text{if} \quad \mathbf{o} \neq \varnothing \\
+X\big(O(\st, \mst, A, I)\big) & \text{otherwise} \\
+\end{cases}
+\end{equation}
+
+where
+\begin{eqnarray}
+\mathbf{o} & \eqdef & H(\mst, I) \\
+(a, b, c, d) \cdot e & \eqdef & (a, b, c, d, e) \\
+\mst' & \eqdef & \mst\ \text{except:} \\
+\mst'_{\mathrm{g}} & \eqdef & \mst_{\mathrm{g}} - C(\st, \mst, I)
+\end{eqnarray}
+
+Note that, when evaluating $\execute$ instead of $X$, 
+the fourth element $I'$ is dropped and the remaining gas $\mst'_{\mathrm{g}}$ is extracted from the resultant machine state $\mst'$.
+
+$X$ is thus cycled (recursively here, but implementations are generally expected to use a simple iterative loop) until either \hyperlink{zhalt}{$Z$} becomes true indicating that the present state is exceptional and that the machine must be halted and any changes discarded or until \hyperlink{hhalt}{$H$} becomes a series (rather than the empty set) indicating that the machine has reached a controlled halt.
+
+\paragraph{Machine State.}
+The machine state $\mst$ is defined as the tuple $(g, \mathrm{pc}, \vec{m}, i, \vec{s},\vec{r})$ which are the gas available, the program counter $pc \in \N_{256}$ , the memory contents, the active number of words in memory (counting continuously from position 0), the data stack contents and return stack contents. 
+The memory contents $\mst_{\vec{m}}$ are a series of zeros of size $2^{256}$.
+The return stack $\mst_{\vec{r}}$ is limited to $1023$ items.
+
+For the ease of reading, the instruction mnemonics, e.g. $\op{ADD}$, should be interpreted as their numeric eqdefalents; the full table of instructions and their specifics is given in Appendix \ref{app:instruction-set}.
+
+For the purposes of defining $Z$, $H$ and $O$, we define $w$ as the current operation to be executed:
+\begin{equation}\label{eq:currentoperation}
+w \eqdef 
+	\begin{cases} 
+		I_{\vec{b}}[\mst_{\mathrm{pc}}] & \text{if} \quad \mst_{\mathrm{pc}} < \lVert I_{\vec{b}} \rVert \\
+		\hyperlink{stop}{\op{STOP}} & \text{otherwise}
+	\end{cases}
+\end{equation}
+
+Furthermore, we let $\popstack$ and $\pushstack$ denote the fixed number of stack items removed from and pushed into the data stack $\mst_{\mathbf{s}}$ by executing an instruction.
+Both $\popstack$ and $\pushstack$ are assumed subscriptable on the instruction. 
+Similarly we define $\poprstack$ and $\pushrstack$ for the return stack $\mst_{\mathbf{r}}$, which is only accessed when entering or returning from subroutines on $\op{JUMPSUB}$ and $\op{RETURNSUB}$ instructions. 
+An instruction cost function $\cost$ evaluates to the full cost, in gas, of executing the given instruction.
+
+\paragraph{Exceptional Halting.}\hypertarget{Exceptional_Halting_function_Z}{}\linkdest{zhalt}
+%
+The exceptional halting function $Z$ is defined as:
+\begin{equation}
+	Z(\st, \mst, I) \eqdef
+	\begin{array}[t]{ll}
+		& \mst_g < \transition(\st, \mst, I) \quad \\
+		\vee & \popstack_w = \varnothing \quad \\
+		\vee & \lVert\mst_\mathbf{s}\rVert < \popstack_w \quad \\
+		\vee & \left( w =  \op{JUMP} \quad \wedge \quad \mst_\mathbf{s}[0] \notin D(I_\mathbf{b})  \right) \quad \\
+		\vee & \left( w =  \op{JUMPI} \quad \wedge \quad \mst_\mathbf{s}[1] \neq 0 \quad \wedge \quad \mst_\mathbf{s}[0] \notin D(I_\mathbf{b})  \right) \quad \\
+		\vee & \left( w = \op{RETURNDATACOPY} \quad \wedge \quad \mst_{\mathbf{s}}[1] + \mst_{\mathbf{s}}[2] > \lVert\mst_{\mathbf{o}}\rVert \right) \quad \\
+		\vee & \lVert\mst_\mathbf{s}\rVert - \popstack_w + \pushstack_w > 1024 \quad\\ 
+		\vee & \left(\neg I_{\mathrm{w}} \quad \wedge \quad W(w, \mst)\right)
+	\end{array}
+\end{equation}
+where
+\begin{equation}
+W(w, \mst) \eqdef \\
+\begin{array}[t]{ll}
+	& w \in \{ \op{CREATE},  \op{CREATE2},  \op{SSTORE}, \op{SELFDESTRUCT}\} \quad \\
+	\vee & \left(\op{LOG0} \le w \wedge w \le  \op{LOG4} \right)\\
+	\vee & \left(w \in \{ \op{CALL},  \op{CALLCODE}\} \wedge \mst_{\mathbf{s}}[2] \neq 0\right)
+\end{array}
+\end{equation}
+
+This states that the execution is in an exceptional halting state if there is insufficient gas, if the instruction is invalid (and therefore its $\popstack$ subscript is undefined), if there are insufficient stack items, if a $\op{JUMP}$/$\op{JUMPI}$ destination is invalid, 
+if the output data size $\lVert\mst_{\mathbf{o}}\rVert$ is insufficient for the copy-output-data operation specified in a $\op{RETURNDATACOPY}$ instruction,
+or if the new stack size would be larger than $1024$ or state modification is attempted during a static call. The astute reader will realize that this implies that no instruction can, through its execution, cause an exceptional halt.
+
+\paragraph{Jump Destination Validity.}
+We previously used $D$ as the function to determine the set of valid jump destinations given the code that is being run. We define this as any position in the code occupied by a  $\op{JUMPDEST}$ instruction.
+
+All such positions must be on valid instruction boundaries, rather than sitting in the data portion of  $\op{PUSH*}$ operations and must appear within the explicitly defined portion of the code (rather than in the implicitly defined \hyperlink{stop}{$\op{STOP}$} operations that trail it).
+
+Formally:
+\begin{equation}
+D(\mathbf{c}) \eqdef D_{J}(\mathbf{c}, 0)
+\end{equation}
+
+where:
+\begin{equation}
+D_{J}(\mathbf{c}, i) \eqdef \begin{cases}
+\{\} & \text{if} \quad i \geqslant \lVert \mathbf{c} \rVert  \\
+\{ i \} \cup D_{J}(\mathbf{c}, N(i, \mathbf{c}[i])) & \text{if} \quad \mathbf{c}[i] =  \op{JUMPDEST} \\
+D_{J}(\mathbf{c}, N(i, \mathbf{c}[i])) & \text{otherwise} \\
+\end{cases}
+\end{equation}
+
+where $N$ is the next valid instruction position in the code, skipping the data of a  $\op{PUSH*}$ instruction, if any:
+\begin{equation}\label{eq:next-instruction}
+N(i, w) \eqdef \begin{cases}
+i + w -  \op{PUSH1} + 2 & \text{if} \quad w \in [ \op{PUSH1},  \op{PUSH32}] \\
+i + 1 & \text{otherwise} \end{cases}
+\end{equation}
+
+\paragraph{Normal Halting.}\hypertarget{normal_halting_function_H}{}\linkdest{hhalt}
+
+The normal halting function $H$ is defined:
+\begin{equation}
+H(\mst, I) \eqdef 
+	\begin{cases}
+	H_{\text{\tiny RETURN}}(\mst) & \text{if} \quad w \in \{ \op{\hyperlink{RETURN}{RETURN}},  \op{REVERT}\} \\
+	\emptystring \quad\quad& \text{if} \quad w \in \{  \op{\hyperlink{stop}{STOP}},  \op{\hyperlink{selfdestruct}{SELFDESTRUCT}} \} \\
+	\varnothing \quad\quad& \text{otherwise}
+	\end{cases}
+\end{equation}
+
+The data-returning halt operations, \hyperlink{RETURN}{ \op{RETURN}} and  \op{REVERT}, have a special function $H_{\text{\tiny RETURN}}$. Note also the difference between the empty sequence and the empty set as discussed \hyperlink{empty_sequence_vs_empty_set}{here}.
+
+\subsubsection{The Execution Cycle}
+
+Stack items are added or removed from the left-most, lower-indexed portion of the series; all other items remain unchanged:
+\begin{eqnarray}
+O\big((\st, \mst, A, I)\big) & \eqdef & (\st', \mst', A', I) \\
+\Delta & \eqdef & \pushstack_{w} - \popstack_{w} \\
+\lVert\mst'_{\mathbf{s}}\rVert & \eqdef & \lVert\mst_{\mathbf{s}}\rVert + \Delta \\
+\quad \forall x \in \left[ \pushstack_{w}, \lVert\mst'_{\mathbf{s}}\rVert -1 \right]: \mst'_{\mathbf{s}}[x] & \eqdef & \mst_{\mathbf{s}}\left[x-\Delta \right]
+\end{eqnarray}
+
+The gas is reduced by the instruction's gas cost.
+\begin{eqnarray}
+	\quad \mst'_{g} & \eqdef & \mst_{g} - C(\st, \mst, I) \label{eq:mu_pc}
+\end{eqnarray}
+
+For most instructions, the program counter $\mathrm{pc}$ increases by $1$ on each cycle, except for following instructions: $\op{PUSH*}$, $\op{JUMP}$, $\op{JUMPI}$, $\op{JUMPSUB}$, $\op{RETURNSUB}$.
+The next valid instruction position for $\op{PUSH*}$ instructions is already specified in $N$ as in \cref{eq:next-instruction}. 
+We assume a function $J$, subscripted by one instruction from $\big\{\op{JUMP}$, $\op{JUMPI}$, $\op{JUMPSUB}$, $\op{RETURNSUB}\big\}$, which evaluates to the according value:
+\begin{eqnarray}\label{eq:u_pc}
+	\quad \mst'_{\mathrm{pc}} & \eqdef & 
+	\begin{cases}
+		\hyperlink{JUMP}{J_{\op{JUMP}}}(\mst) & \text{if} \quad w =  \op{JUMP} \\
+		\hyperlink{JUMPI}{J_{\op{JUMPI}}}(\mst) & \text{if} \quad w =  \op{JUMPI} \\
+		\hyperlink{JUMPSUB}{J_{\op{JUMPSUB}}}(\mst) & \text{if} \quad w =  \op{JUMPSUB} \\
+		\hyperlink{RETURNSUB}{J_{\op{RETURNSUB}}}(\mst) & \text{if} \quad w =  \op{RETURNSUB} \\
+		N(\mst_{\mathrm{pc}}, w) & \text{otherwise}
+	\end{cases}
+\end{eqnarray}
+
+In general, we assume the memory, self-destruct set and system state do not change:
+\begin{eqnarray}
+\mst'_{\mathbf{m}} & \eqdef & \mst_{\mathbf{m}} \\
+\mst'_{\mathrm{i}} & \eqdef & \mst_{\mathrm{i}} \\
+A' & \eqdef & A \\
+\st' & \eqdef & \st
+\end{eqnarray}
+
+However, instructions do typically alter one or several components of these values. Altered components listed by instruction are noted in Appendix \ref{app:vm}, alongside values for $\pushstack$, $\popstack$, $\pushrstack,\poprstack$ and a formal description of the gas requirements.
+
+\subsubsection{Difference from Ethereum}
+The execution function $\execute$ follows nearly the same definition as in Ethereum yellowpaper \cite{ETH_yellow} except for a few instructions. 
+When executing $O(\st, \mu, A, I) \eqdef (\st' , \mu' , A , I')$ 
+for the iterator function $O$ which defines the result of a single cycle of the state machine,
+{\name} differs from Ethereum on following instructions. 
+
+
+% \paragraph{Original receiver.} Ethereum passes \emph{original transactor $o$} to indicate who is responsible to pay for gas fee in sub-message-call/sub-contract-create action. Since Conflux allow smart contract to sponsor for gas and storage collateral, sometimes the receiver is the payer for gas fee and/or storage collateral in the execution. So we passes an additional parameter \emph{original receiver $i$} in function $\creation'$ and $\execution$. This influences CREATE, CALL, CALLCODE, DELEGATECALL, and STATICCALL operations. 
+
+
+\paragraph{Sub-call operations.} 
+{\name} has two additional parameters comparing with Ethereum: 
+the original world-state $\tilde{\st}$ and the storage owner $i$.
+In sub-call operations such as $\op{CREATE}$, $\op{CALL}$, $\op{CALLCODE}$, $\op{DELEGATECALL}$, and $\op{STATICCALL}$,  
+the original world-state $I_\st$ and storage owner $I_i$ are also passed to $\creation$ and $\execution$ as part of the execution environment $I$. 
+
+
+
+\paragraph{$\op{SSTORE}$ operation.} 
+The $\op{SSTORE}$ operation transforms $(\st,A)$ into $(\st',A')$ via intermediate states $(\st^{*},A^{*})$ and $(\st^{**},A^{**})$ as follows:
+
+\begin{align}
+	\st^{*}   &\eqdef \st \qquad \mbox{  except:}\\
+	\st^*[I_a]_{\bf s}[\mst_{\sf s}[0]] &\eqdef\left\{
+		\begin{array}{ll}
+			(\mst_{\sf s}[1],I_i) & \mst_{\sf s}[1]\neq 0\\
+			\emptyset & \mst_{\sf s}[1]= 0\\
+		\end{array}
+	\right.\\			 
+	C_{\op{SSTORE}}(\st,\mst)  &\eqdef G_{sreset} 
+% \end{align}
+\\
+% And the resultant state $(\st',A')$ is determined as follows:
+% \begin{align}
+	(\st^{**},A^{**}) &\eqdef \left\{
+		\begin{array}{ll}
+			\Phi(\st^*,A,s_o,-64) & s_o \neq \emptyset \wedge s_o\neq s^*_o  \\
+			(\st^{*},A) & \text{otherwise}
+		\end{array}
+	\right.\\
+	(\st',A') &\eqdef \left\{
+		\begin{array}{ll}
+			\Phi(\st^{**},A^{**},I,64) & s^*_o \neq \emptyset \wedge s_o\neq s^*_o\\
+			(\st^{**},A^{**}) & \text{otherwise}
+		\end{array}
+	\right.
+	% \\ 
+	%  s &\eqdef \st[I_a]_{\bf s}[\mst_{\sf s}[0]] \\
+	%  s^* &\eqdef \st^*[I_a]_{\bf s}[\mst_{\sf s}[0]] 
+\end{align}
+where $s \eqdef \st[I_a]_{\bf s}[\mst_{\sf s}[0]]$, $s^* \eqdef \st^*[I_a]_{\bf s}[\mst_{\sf s}[0]]$, and $\Phi$ denotes the function such that $\Phi(\st,A,\alpha,n)$ updates the world-state and substate when 
+the account $\account$ occupies $n$ bytes ($n\in \mathbb{Z}$ can be both positive and negative).
+% 
+The output of $(\st^2,A^2)\eqdef \Phi(\st^1,A^1,\alpha,n)$ is defined as follows: 
+%
+\begin{align}
+	\st^2 &\eqdef \st^1 \qquad \mbox{except:}\\
+	\st^2[\alpha]_o &\eqdef \st^1[\alpha]_o+n\times 10^{18}/1024
+% \end{align}
+\\& \text{and} \notag\\
+% \begin{align}
+	A^2 &\eqdef A^1 \qquad \mbox{except:}\\
+	A^2_{\bf o} &\eqdef \left\{
+		\begin{array}{ll}
+			A^1_{\bf o} \cdot (a,n) & n>0 \\
+			A^1_{\bf o} & \text{otherwise}
+		\end{array}
+	\right.\\
+	A^2_{\bf i} &\eqdef \left\{
+		\begin{array}{ll}
+			A^1_{\bf i} \cdot (a,-n) & n<0 \\
+			A^1_{\bf i} & \text{otherwise}
+		\end{array}
+	\right.
+\end{align}
+
+In Ethereum, the cost of operation $\op{SSTORE}$ is $G_{sset}=20000$ gas when the storage value is set to non-zero from zero,
+and  $G_{sreset}=5000$ gas when the storage value is set to zero. 
+Ethereum will also refund $R_{sclear}=15000$ gas when the storage value is set to zero from non-zero. 
+
+In {\name}, since cost of using storage is reflected by collateral for storage, there is no need to charge space consumption in gas. 
+Thus {\name} charged $G_{sreset}=5000$ gas for all the $\op{SSTORE}$ operation, 
+regardless of the storage value,
+and there is no gas refund either. 
+Furthermore, the {\name} ledger $\st$ tracks the owner of every storage entry with non-zero value. 
+The execution substate $A$ records all changes on ownership of storage entries. 
+
+\paragraph{$\op{SELFDESTRUCT}$ operation.} When executing the $\op{SELFDESTRUCT}$ operation on $(\st,\mu,A,I)$, Conflux follows the steps as below:
+\begin{itemize}[nosep]
+	\item Apply buffered changes on the sponsor balance for storage collateral. 
+	(Recall that $I_\st$ is part of $I$ and it denotes the original world-state right before the execution of this transaction.)
+	\begin{align}
+		\st^1  &\eqdef \st \qquad \mbox{ except:}\\
+		\st^1[I_a]_p[{\sf col}]_b &\eqdef \st[I_a]_p[{\sf col}]_b - \left(\st[I_a]_o-I_\st[I_a]_o\right) \\
+		A^1 &\eqdef A
+	\end{align}
+
+	\item If the contract has non-zero collateral for storage, i.e. $\st[I_a]_o>0$, 
+	the destruction process is interrupted and an \emph{Internal Contract} exception will be generated.
+
+
+	\item Refund the balance for code collateral to code owner. 
+	Supposing that ${\bf p}$ is code for $I_a$, 
+	\begin{align}
+		(\st^2,A^2) = \Phi(\st^1,A^1,\st^1[I_a]_w,-|{\bf p}|)
+	\end{align}
+
+	\item Refund {\bf sponsor balance for gas} to {\bf sponsor for gas}.
+	\begin{align}
+		\st^3  &\eqdef \st^2 \qquad \mbox{  except:}\\
+		\st^3[a]_b&\eqdef\st^2[a]_b+\st^2[I_a]_p[{\sf gas}]_b
+		\qquad\text{where $a  \eqdef \st^2[I_a]_p[{\sf gas}]_a$} \\
+		A^3 &\eqdef A^2
+	\end{align}
+
+	\item Refund {\bf sponsor balance for collateral} to {\bf sponsor for collateral}.
+	\begin{align}
+		\st^4  &\eqdef \st^3 \qquad \mbox{  except:}\\
+		\st^4[a]_b&\eqdef\st^3[a]_b+\st^3[I_a]_p[{\sf col}]_b
+		\qquad\text{where $a \eqdef \st^3[I_a]_p[{\sf col}]_a$} \\
+		A^4 &\eqdef A^3
+	\end{align}
+
+	\item The rest follows the Ethereum's destruction operation on state $(\st^4,A^4)$.
+\end{itemize}
+
+% \paragraph{$\op{CREATE2}$ operation.} Ethereum introduces $\op{CREATE2}$ operation in EIP-1014, which is not listed in its yellowpaper. 
+% {\name} implements this instruction with identical behavior as Ethereum.
+
+\paragraph{Subroutine operation.} Ethereum introduces $\op{BEGINSUB}$, $\op{JUMPSUB}$, $\op{RETURNSUB}$ instructions in EIP-2315, which is not listed in its yellowpaper. 
+{\name} implements this instruction with identical behavior as Ethereum.
+
+\paragraph{Substate Combination.} 
+Each time a sub-call/creation returns successfully, Ethereum accrues the substate $A^+$ returned from callee process to the substate $A$ of caller process, which is denoted by $A'\eqdef A\Cup A^+$. 
+
+In {\name}, $A'\eqdef A\Cup A^+$ refers to $A'_{\bf s}=A_{\bf s}\cup A^+_{\bf s}$, $A'_{\bf l}=A_{\bf l}\circ A^+_{\bf l}$,  $A'_{\bf t}=A_{\bf t}\circ A^+_{\bf t}$, $A'_{\bf o}=A_{\bf o}\circ A^+_{\bf o}$ and $A'_{\bf i}=A_{\bf i}\circ A^+_{\bf i}$. 
+
+% \paragraph{Additional VM exception} Conflux has several additional exceptions which make execution fail. 
+
+% \begin{itemize}
+% 	\item {\bf Exceed Storage Limit.} Let $\tx_l$ be the storage limit in the transaction. $b$ equals to the {\bf sponsor balance for collateral} of original receiver $I_a$ if original sender $I_o$ is in {\bf whitelist} of original receiver $I_a$ at the beginning of execution $\tx$. Otherwise, let $b=0$. Let $r$ be the token (in $\mathsf{Drip}$) used for each byte in storage collateral, $l'\eqdef\max\{0,T_l-b/r\}$. We use $\cfs(a;\st)$ denote the 64-byte storage entries occupied by address $a$ in world-state $\st$. For any world-state $\st'$ at the time point of \emph{Normal Halting}\footnote{Normal Halting is defined in Ethereum yellowpaper.}, (including sub-call/creation), if $\cfs(I_o;\st')-\cfs(I_o;\st)>l'/64$, the \emph{Exceed Storage Limit Exception} is triggered. 
+% 	\begin{itemize}
+% 	    \item \emph{Corner case 1:} If transaction execution occupies a large amount of storage and then releases them before the next normal halting, the \emph{Exceed Storage Limit Exception} will not be triggered.
+% 		\item \emph{Corner case 2:} If the original sender $I_o$ is removed from the {\bf whitelist} during transaction execution, the \emph{Exceed Storage Limit Exception} may be triggered even if incremental storage is much less than storage limit. 
+% 		\item \todo{}{I found another corner case here. Since we plan to modify the storage limit behavior, I skim it here.}
+% 	\end{itemize}
+% 	\item {\bf Not Enough Balance for Storage.} At the time of normal halting, Conflux will check if all the account have enough balance for storage collateral. (For contract, Conflux checks whether its {\bf sponsor balance for collateral}) has enough balance. 
+% 	\begin{itemize}
+% 		\item \emph{Corner case 1:} If the original recipient $I_i$ is responsible for storage collateral, but it do not have enough {\bf sponsor balance for collateral} for execution, this exception will be triggered even if the original sender $I_o$ has enough balance. But if the {\bf sponsor balance for collateral} is deducted to less than $10^{18}/1024$ ({\sf Drip} required for one storage entry), this problem will not happen. 
+% 	\end{itemize}
+% 	\item {\bf Internal Contract.} The exceptions caused by internal contracts, such as the transaction trying set a sponsor for an non-contract address. 
+% \end{itemize}
+% %
+
+% {\color{red} {\bf Note:} Since Conflux has a lazy update for storage occupied and released, and the storage collateral of an address does not change monotonously, the result of execution depends on the checkpoint in updating storage information. This exposes all the implementation details for optimization and we fail to list all of them here. }
+
+% % % \subsection{}

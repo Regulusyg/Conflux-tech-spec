@@ -1,0 +1,305 @@
+% !TEX root=./tech-specification.tex
+\section{Internal Contracts}
+\label{sec:internal}
+\name introduces several built-in internal contracts for better system maintenance and on-chain governance.
+
+
+
+\subsection{Sponsorship for Usage of Contracts}
+\label{sec:sponsor}
+
+\name implements a sponsorship mechanism to subsidize the usage of smart contracts. 
+Thus, a new account with zero balance is able to call smart contracts as long as the execution is sponsored (usually by the operator of Dapps).
+The built-in \emph{SponsorControl Contract} is introduced to record the sponsorship information of smart contracts.
+
+The SponsorControl contract keeps the following information for each user-established contract $\contract$:
+\begin{itemize}[nosep]
+	\item {\bf sponsor for gas}: this is the account that provides the subsidy for gas consumption;
+
+	\item {\bf sponsor for collateral}: this is the account that provides the subsidy for collateral for storage; 
+
+	\item {\bf sponsor balance for gas}: this is the balance of subsidy available for gas consumption;
+
+	\item {\bf sponsor balance for collateral}: this is the balance of subsidy available for collateral for storage;
+
+	\item {\bf sponsor limit for gas fee}: this is the upper bound for the gas fee subsidy paid for every sponsored transaction;
+
+	\item {\bf whitelist}: this is the list of normal accounts that are eligible for the subsidy, where a special all-zero address refers to all normal accounts.
+	Only the contract itself has the authority to change this list.
+\end{itemize}
+
+% \medskip
+
+\paragraph{Sponsor for gas consumption.}
+For a contract $\contract$ with non-empty {\bf sponsor for gas} and a transaction $\tx$ calling $\contract$, 
+$\tx$ is eligible for the subsidy for gas consumption 
+if $\senderf(\tx)$ is in the \textbf{whitelist} of $\contract$
+and the gas fee specified by $\tx$ is within the limit, i.e. $\tx_p\times\tx_g \le \text{\textbf{sponsor limit for gas fee} of $\contract$}$.
+The gas consumption of $\tx$ is paid from the \textbf{sponsor balance for gas} of $\contract$ (if it is sufficient) rather than from the sender's balance,
+and the execution of $\tx$ would fail if the \textbf{sponsor balance for gas fee} cannot afford the gas consumption.
+In case the transaction specifies a gas fee (i.e. $\tx_p\times\tx_g$) greater than $\min\set{\textbf{sponsor limit for gas fee}, \textbf{sponsor balance for gas}}$, there is no subsidy and the sender $\sender{\tx}$ should pay for the gas consumption as usual.
+
+\paragraph{Sponsor for storage collateral.}
+For a contract $\contract$ with non-empty {\bf sponsor for collateral} and a transaction $\tx$ calling $\contract$,
+$\tx$ is eligible for the subsidy for storage usage if: 
+a) its {\bf sender} $\sender{\tx}$ is in the \textbf{whitelist} of $\contract$, and 
+b) its {\bf storageLimit} $\tx_\ell$ costs no more than {\bf sponsor balance for collateral} of $\contract$. 
+If $\tx$ is eligible, then the collateral for storage incurred in the execution of $\tx$ 
+is deducted from \textbf{sponsor balance for collateral} of $\contract$, 
+and the owner of those modified storage entries is set to $\contract$ accordingly.
+In case $\sender{\tx}$ is not in the \textbf{whitelist} or the \textbf{sponsor balance for collateral} cannot cover the {\bf storageLimit}, the sender $\sender{\tx}$ has to pay for storage usage from its own balance as usual.
+
+\paragraph{Components.} The first five items {\bf sponsor for gas}, {\bf sponsor for collateral}, {\bf sponsor balance for gas}, {\bf sponsor balance for collateral}, {\bf sponsor limit for gas fee} are stored in account component $\contract_p$. The {\bf whitelist} is stored in storage of the sponsor whitelist control smart contract, which has a hard-code address $\contract_{\sf sw}$ specified in section~\ref{sec:parameters}. If $\st[\contract_{\sf sw}]_{\bf \account}[\kec(\rlp(\contract,\account))]_v$ is non-zero, address $\account$ is in the whitelist of contract $\contract$. 
+In particular, we let $\account_0=0$ be a zero address and $\st[\contract_{\sf sw}]_{\bf s}[\kec(\rlp(\contract,\account_0))]_v\neq 0$ denote that all valid addresses are in the whitelist of contract $\contract$. 
+
+
+\subsubsection{Sponsorship Update}
+
+Both sponsorship for gas and for collateral can be updated by calling the SponsorControl contract.
+The current sponsors can call this contract to transfer funds to increase the sponsor balances directly,
+and the current sponsor for gas is also allowed to increase the \textbf{sponsor limit for gas} without transferring new funds.
+Other normal accounts can replace the current sponsors by calling this contract and providing more funds for sponsorship.
+
+
+
+To replace the \textbf{sponsor for gas} of a contract $\contract$, the new sponsor should transfer to $\contract$ a fund more than the current \textbf{sponsor balance for gas} of $\contract$ and set a new value for \textbf{sponsor limit for gas fee}.
+The new value of \textbf{sponsor limit for gas fee} should be no less than the old sponsor's limit  
+unless the old \textbf{sponsor balance for gas} cannot afford the old limit.
+Moreover, the transferred fund should be $\ge 1000$ times of the new limit, so that it is sufficient to subsidize at least $1000$  transactions calling $\contract$. 
+If the above conditions are satisfied, the remaining \textbf{sponsor balance for gas} will be refunded to the old \textbf{sponsor for gas},
+and then \textbf{sponsor balance for gas}, \textbf{sponsor for gas} and \textbf{sponsor limit for gas fee} will be updated according to the new sponsor's specification.
+
+
+The replacement of \textbf{sponsor for collateral} is similar except that there is no analog of the limit for gas fee.
+The new sponsor should transfer to $\contract$ a fund more than the fund provided by the current \textbf{sponsor for collateral} of $\contract$.
+Then the current \textbf{sponsor for collateral} will be fully refunded, i.e. the sum of \textbf{sponsor balance for collateral} and $\cfs(\contract)$,
+and both collateral sponsorship fields are changed as the new sponsor's request accordingly.
+Note that the contract $\contract$ is the owner of subsidized storage entries, so that the replacement of sponsorship for collateral will not affect ownership of existing storage entries.
+
+\paragraph{Note:} A contract account is also allowed to be a sponsor.
+Therefore it is possible that the sponsoring contract may be destructed before its sponsorship is replaced,
+in which case the receiver of sponsorship refund will be an already-destructed contract.
+Since the balance of such a contract is not operable (unless there is collision of $\kec$),
+it is meaningless to record that number in state and hence the refund will be burnt immediately.
+
+\subsubsection{Interfaces and exceptions}
+
+This contract provides the following four solidity interfaces:
+\begin{itemize}[nosep]
+	\item {\tt set\char`_sponsor\char`_for\char`_gas(\solkw{address} contract\char`_addr, \solkw{uint} upper\char`_bound)}
+    \item {\tt set\char`_sponsor\char`_for\char`_collateral(\solkw{address} contract\char`_addr)}
+    \item {\tt add\char`_privilege(\solkw{address[]} mem)}
+    \item {\tt remove\char`_privilege(\solkw{address[]} mem)}
+\end{itemize}
+
+The transferred value when calling function {\tt set\char`_sponsor\char`_for\char`_gas} and {\tt set\char`_sponsor\char`_for\char`_collateral} represents the amount of tokens that the sender (new sponsor) is willing to pay.
+Every contract maintains its {\bf whitelist} by calling {\tt add\char`_privilege} and {\tt remove\char`_privilege}.
+
+During execution of this SponsorControl contract, \emph{Internal Contract Exception} will be triggered in the following cases:
+\begin{itemize}[nosep]
+	\item Invalid input format, including calling unsupported functions.
+	\item Called from a system operation (e.g. $\mathsf{CALLCODE}$, $\mathsf{DELEGATECALL}$) in EVM.
+    \item Trying to set sponsorship for an inexistent or non-contract address.
+    \item When setting sponsor for gas or collateral, the sender is distinct from the current \textbf{sponsor} and the transferred balance does not exceed the current \textbf{sponsor balance for gas/collateral}.
+    \item When setting sponsor for gas, the transferred balance is less than $1000$ times of the new \textbf{sponsor limit for gas fee}.
+    \item When setting sponsor for gas, the caller attempts to decrease \textbf{sponsor limit for gas fee} while the current \textbf{sponsor balance for gas} is no less than current \textbf{sponsor limit for gas fee}. 
+\end{itemize}
+
+\subsubsection{Gas consumption}
+
+The {\tt set\char`_sponsor\char`_for\char`_gas()} and {\tt set\char`_sponsor\char`_for\char`_collateral()} functions of the SponsorControl contract cost $10000$ gas to update the sponsor information of a contract.
+The {\tt add\char`_privilege()} and {\tt remove\char`_privilege()} functions cost $5000$ gas for each entry of membership update in the input data.
+Calling inexistent functions of SponsorControl contract costs $5000$ gas by default.
+And the whole {\bf gasLimit} is consumed in case of any exceptions such as illegal input data or wrong authentication.
+
+
+\subsection{Admin Management}
+\label{sec:admin}
+
+The \emph{AdminControl Contract} is introduced for better maintenance of other smart contracts, espeically which are generated tentatively without a proper destruction routine:
+it records the administrator of every user-established smart contract and handles the destruction on request of corresponding administrators.
+
+The default administrator of a smart contract $\contract$ is the  creator of $\contract$, i.e. the sender $\account$ of the transaction that causes the creation of $\contract$.
+The current administrator of a smart contract can transfer its authority to another \emph{normal account} by sending a request to the AdminControl contract.
+Contract accounts are not allowed to be the administrator of other contracts,
+since this mechanism is mainly for tentative maintenance.
+Any long term administration with customized authorization rules should be implemented inside the contract,
+i.e. as a specific function that handles destruction requests.
+
+At any time, the administrator $\account$ of an existing contract $\contract$ has the right to request destruction of $\contract$ by calling AdminControl.
+However, the request would be rejected if the collateral for storage of contract $\contract$ is not zero, i.e. $\cfs(\contract)>0$, or $\account$ is not the current administrator of $\contract$.
+If $\account$ is the current administrator of $\contract$ and $\cfs(\contract)=0$, then the destruction request is accepted and processed as follows:
+\begin{enumerate}[nosep]
+ 	\item the balance of $\contract$ will be refunded to $\account$; 
+
+	\item the \textbf{sponsor balance for gas} of $\contract$ will be refunded to \textbf{sponsor for gas};
+
+	\item the \textbf{sponsor balance for collateral} of $\contract$ will be refunded to \textbf{sponsor for collateral};
+
+	\item the internal state in $\contract$ will be released and the corresponding collateral for storage refunded to owners;
+
+	\item the contract $\contract$ is deleted from world-state.
+\end{enumerate} 
+
+The administrator of contract $a$ is stored in account component $a_a$. 
+
+\subsubsection{Interfaces and exceptions}
+
+This contract provides the following two solidity interfaces:
+\begin{itemize}[nosep]
+	\item {\tt set\char`_admin(\solkw{address} contract\char`_addr, \solkw{address} admin)}
+    \item {\tt destroy(\solkw{address} contract\char`_addr)}
+\end{itemize}
+
+This contract will trigger \emph{Internal Contract Exception} in the following cases:
+\begin{itemize}[nosep]
+	\item Invalid input format, including calling unsupported functions.
+
+	\item Called from a system operation (e.g. $\mathsf{CALLCODE}$, $\mathsf{DELEGATECALL}$) in EVM.
+    \item Try to destroy a contract with non-zero storage collateral (the corresponding storage must be released first). 
+\end{itemize}
+
+\subsubsection{Gas consumption}
+
+Each function of the AdminControl contract costs $5000$ gas,
+including inexistent functions. 
+And the whole {\bf gasLimit} is consumed in case of exceptions such as illegal input data or wrong authentication.
+
+\subsection{Staking Mechanism}
+\label{sec:staking}
+
+\name introduces the staking mechanism for two reasons:
+first, staking mechanism provides a better way to charge the occupation of storage space (comparing to ``pay once, occupy forever'');
+and second, this mechanism also helps in defining the voting power in decentralized governance.
+
+At a high level, \name implements a built-in \emph{Staking Contract} 
+% (at address $\stakingcontract$) 
+to record the staking information of all accounts.
+By sending a transaction to this contract, 
+users (both external users and smart contracts) can deposit/withdraw funds, which is also called \emph{stakes} in the contract.
+The interest of staked funds is issued at withdrawal, 
+and depends on both the amount and staking period of the fund being withdrawn. 
+
+
+
+In \name, the staking contract keeps track of staked funds and freezing rules. For every account $\account$ the staking contract records the following:
+\begin{itemize}
+	\item {\bf staking funds}: each staking fund entry consists of the balance $v\in\N_{256}$ and creation time $t\in\N_{64}$ of a staked fund from the sender $\account$, and the entry is cleared when the fund is completely withdrawn;
+	
+
+	\item {\bf freezing rules}: each freezing rule entry is a combination of $(v,t)\in \N_{256}\times\N_{64}$ which promises that the total stake balance of account $\account$ must be at least $v$ (measured in \unit) as long as the block number (as defined in \hyperlink{blockno}{$\blockno$}) does not exceed $t$. 
+	Expired freezing rule entries are cleared at the next update of freezing rules of the same account $\account$.	
+\end{itemize}
+
+Both kinds of entries in the staking contract requires collateral for storage, and the collateral is returned at the clearance of corresponding entries.
+
+
+
+\subsubsection{Interest Rate}
+
+The staking interest rate is currently set to \interest per year.
+% Compound interest is not implemented yet, however users may achieve it manually. 
+Compound interest is implemented in the granularity of blocks.
+% On withdrawing funds staked for less than \guangsays{three months}, a commission fee applies depending on the length of actual staking time.
+
+When executing a transaction sent by account $\alpha$ at block $\block$ to withdraw a fund of value $v$ deposited at block $\block'$,
+the interest is calculated as follows:
+\begin{align}
+	\text{Interest issued to $\account$} 
+	= v \times \left(\frac{\interest}{\blockinyear}\right)^T
+\end{align}
+where $T\eqdef\blockno(\block) - \blockno(\block')$ is the staking period measured by number of blocks, 
+and $\blockinyear$ is the expected number of blocks generated in $365$ days with the target block time $\blocktime$ seconds.
+% 
+% The commission fee starts from $\commissionpercent\%$ and linearly decreases to $0$ after $\commissiondecayinblock$ blocks (i.e. $\commissiondecayinday$ days in expectation).
+Therefore after the withdrawal $\account$'s total amount of staking funds is decreased by $v$,
+and its balance is increased by:
+\begin{align}
+	\Delta(\account_b) \eqdef 
+	% \begin{cases}
+		\left(1+ \left( \frac{ \interest }{\blockinyear} \right)^T \right) \cdot v 
+	% & \mbox{if $T\ge \commissiondecayinblock$}
+	% \\
+	% \left(1+ \left(\frac{ \interest }{\blockinyear}
+	% \right)^T -  \frac{\commissiondecayinblock-T}{\commissiondecayinblock}\times \commissionpercent\% \right) \cdot v
+	% & \mbox{otherwise}
+	% \end{cases}
+\end{align}
+
+The account $\account$ only specifies the value $v$ in its withdrawal request. 
+The withdrawal always starts from the earliest staked fund and recursively continues to the next one until the accumulative amount is sufficient.
+% In case multiple staked funds are invoked in a single withdrawal request, the commission fee applies on each fund individually.
+
+The same interest rate applies to collateral for storage as well, but the CFS interest is issued directly to the miners as the payment for storage usage at the generation of every new block.
+More details about CFS interest issuance are specified in Section~\ref{subsec:storagefee}.
+
+
+\subsubsection{Staking for Voting Power}
+
+For decentralized governance, the staking mechanism provides a way to measure the involvement and devotion of users with the new dimension of staking age.
+
+When deciding voting power, it is fair and reasonable to take the staking time into consideration,
+rather than merely the amount of tokens.
+By relating voting power to committed staking period, the risk of being attacked is also mitigated,
+since the attacker must hold the tokens for a sufficiently long period to obtain enough voting power, which increases the cost of launching an attack.
+
+For every account $\account$, its committed staking time is recorded in the build-in staking contract in the form of 
+{\bf freezing rules},
+where each entry $(v,t)\in \N_{256}\times\N_{64}$ is a promise that the  staking balance of $\account$ must be at least $v$ \unit until the index of block in total order (e.g. $\blockno$) reaches $t$.
+A withdrawal request from $\account$ is invalid if any freezing rule is violated after fulfilling that request.
+The list of freezing rules for every account is append-only so that committed staking period cannot be canceled or shorten.
+However every single rule will eventually expire as the block number grows, e.g. the rule $(v,t)$ expires at block $\block$ with $\blockno(\block)\ge t$. 
+Expired freezing rule entries are cleared from state storage of the built-in staking contract at the next update of freezing rules of the same account.	
+
+Note that freezing rules are decoupled from specific staking funds, i.e. old funds can be withdrawn as long as the remaining staking balance is sufficient. 
+Therefore, the staking contract is allowed to maintain staked funds in a first-in-first-out manner (i.e. the earliest staked fund is also first withdrawn).
+% to minimize commission fee.
+
+
+The voting power of each staked token is defined in the following table:
+
+\par
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Remaining Committed Staking Time & Voting Power \\
+\midrule
+One year or more (i.e. $\ge \blockinyear$ blocks) & $1$  \\
+Six months to one year ($\ge 31536000$ but $<63072000$ blocks) & $0.5$ \\
+Three to six months ($\ge 15768000$ but $<31536000$ blocks) & $0.25$\\
+Less than three month (i.e. $< 15768000$ blocks) & $0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\par
+Therefore the total voting power of each account can be easily calculated from its freezing rules as recorded in the staking contract.
+
+\subsubsection{Interfaces and exceptions}
+
+This contract provides the following three solidity interfaces:
+\begin{itemize}[nosep]
+	\item {\tt deposit(\solkw{uint} amount)}
+    \item {\tt withdraw(\solkw{uint} amount)}
+    \item {\tt lock(\solkw{uint} amount, \solkw{uint} unlock\_block\_number)} 
+\end{itemize}
+
+No value should be transferred to the Staking Contract, 
+even when calling {\tt deposit} or {\tt lock} function. 
+The Staking Contract merely moves tokens from the balance of an account to its staking list. 
+
+The execution of Staking Contract will trigger \emph{Internal Contract Exception} in the following cases:
+\begin{itemize}[nosep]
+	\item Invalid input format, including calling unsupported functions.
+
+	\item Called from a system operation, e.g. via $\mathsf{CALLCODE}$ or $\mathsf{DELEGATECALL}$.
+
+    \item Not enough balance for the requested operation.
+\end{itemize}
+
+\subsubsection{Gas consumption}
+
+The {\tt deposit} function of the Staking Contract costs $10000$ gas plus additional $10000$ gas for each entry in the current staking list, i.e. the total amount of consumed gas by the {\tt deposit} function is $10000(\ell+1)$ gas, where $\ell$ denotes the length of staking list.
+The {\tt withdraw} and {\tt lock} functions cost $10000\ell$ gas each. 
+Calling inexistent functions of the Staking Contract costs $10000$ gas by default.
+The whole {\bf gasLimit} is consumed in case of exceptions such as illegal input data or insufficient balance.
+
