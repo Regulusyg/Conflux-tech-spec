@@ -10,17 +10,17 @@ We employ the following definitions:
 \toprule
 Name & Value & Description \\
 \midrule
-\linkdest{J__wordbytes}{}$J_{wordbytes}$ & 4  & Bytes in word. \\
-\linkdest{J__datasetinit}{}$J_{datasetinit}$ & $2^{30}$ & Bytes in dataset at genesis. \\
-\linkdest{J__datasetgrowth}{}$J_{datasetgrowth}$ & $2^{23}$ & Dataset growth per stage. \\
-\linkdest{J__cacheinit}{}$J_{cacheinit}$ & $2^{24}$ & Bytes in cache at genesis. \\
-\linkdest{J__cachegrowth}{}$J_{cachegrowth}$ & $2^{17}$ & Cache growth per stage. \\
-\linkdest{J__stage}{}$J_{stage}$ & 30000 & Blocks per stage. \\
-\linkdest{J__mixbytes}{}$J_{mixbytes}$ & 128 & mix length in bytes. \\
-\linkdest{J__hashbytes}{}$J_{hashbytes}$ & 64 & Hash length in bytes. \\
-\linkdest{J__parents}{}$J_{parents}$ & 256 & Number of parents of each dataset element. \\
-\linkdest{J__cacherounds}{}$J_{cacherounds}$ & 3 & Number of rounds in cache production. \\
-\linkdest{J__accesses}{}$J_{accesses}$ & 64 & Number of accesses in hashimoto loop. \\
+\linkdest{J__wordbytes}{}$J_{wordbytes}$ & $4$  & Bytes in word. \\
+\linkdest{J__datasetinit}{}$J_{datasetinit}$ & $3\times 2^{31}$ & Bytes in dataset at genesis. \\
+\linkdest{J__datasetgrowth}{}$J_{datasetgrowth}$ & $2^{24}$ & Dataset growth per stage. \\
+\linkdest{J__cacheinit}{}$J_{cacheinit}$ & $3\times 2^{23}$ & Bytes in cache at genesis. \\
+\linkdest{J__cachegrowth}{}$J_{cachegrowth}$ & $2^{16}$ & Cache growth per stage. \\
+\linkdest{J__stage}{}$J_{stage}$ & $2^{19}$ & Epoches per stage. \\
+\linkdest{J__mixbytes}{}$J_{mixbytes}$ & $128$ & mix length in bytes. \\
+\linkdest{J__hashbytes}{}$J_{hashbytes}$ & $64$ & Hash length in bytes. \\
+\linkdest{J__parents}{}$J_{parents}$ & $256$ & Number of parents of each dataset element. \\
+\linkdest{J__cacherounds}{}$J_{cacherounds}$ & $3$ & Number of rounds in cache production. \\
+\linkdest{J__accesses}{}$J_{accesses}$ & $64$ & Number of accesses in hashimoto loop. \\
 \bottomrule
 \end{tabu*}
 
@@ -76,8 +76,12 @@ we define the array $\mathbf{c}_{i}$ as the $i$-th element of the initial cache:
 		\kec512(\mathbf{c}_{i-1}) & \text{otherwise}
 	\end{cases}
 \end{equation}
-Let $n \eqdef \left\lfloor c_{size}/J_{hashbytes}\right\rfloor$.
-The initial cache $\mathbf{c'}$ can be defined as
+
+Let $n$ denote the number of elements in cache:
+\begin{equation}
+	n \eqdef \left\lfloor c_{size}/J_{hashbytes}\right\rfloor
+\end{equation}
+The initial cache $\mathbf{c'}$ can be defined as:
 \begin{equation}
  \mathbf{c'}[i] \eqdef \mathbf{c}_{i}, \quad \forall \quad i \in\set{0,1,2,\dots, n-1}
 \end{equation}
