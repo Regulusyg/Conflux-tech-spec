@@ -49,8 +49,8 @@ is deducted from \textbf{sponsor balance for collateral} of $\contract$,
 and the owner of those modified storage entries is set to $\contract$ accordingly.
 In case $\sender{\tx}$ is not in the \textbf{whitelist} or the \textbf{sponsor balance for collateral} cannot cover the {\bf storageLimit}, the sender $\sender{\tx}$ has to pay for storage usage from its own balance as usual.
 
-\paragraph{Components.} The first five items {\bf sponsor for gas}, {\bf sponsor for collateral}, {\bf sponsor balance for gas}, {\bf sponsor balance for collateral}, {\bf sponsor limit for gas fee} are stored in account component $\contract_p$. The {\bf whitelist} is stored in storage of the sponsor whitelist control smart contract, which has a hard-code address $\contract_{\sf sw}$ specified in section~\ref{sec:parameters}. If $\st[\contract_{\sf sw}]_{\bf \account}[\kec(\rlp(\contract,\account))]_v$ is non-zero, address $\account$ is in the whitelist of contract $\contract$. 
-In particular, we let $\account_0=0$ be a zero address and $\st[\contract_{\sf sw}]_{\bf s}[\kec(\rlp(\contract,\account_0))]_v\neq 0$ denote that all valid addresses are in the whitelist of contract $\contract$. 
+\paragraph{Components.} The first five items {\bf sponsor for gas}, {\bf sponsor for collateral}, {\bf sponsor balance for gas}, {\bf sponsor balance for collateral}, {\bf sponsor limit for gas fee} are stored in account component $\contract_p$. The {\bf whitelist} is stored in storage of vote staking contract. See \cref{eq:whitelist} for formal definition. 
+In particular, if a zero address appears in the whitelist, all valid addresses are in the whitelist of contract $\contract$. 
 
 
 \subsubsection{Sponsorship Update}
@@ -98,7 +98,7 @@ Every contract maintains its {\bf whitelist} by calling {\tt add\char`_privilege
 During execution of this SponsorControl contract, \emph{Internal Contract Exception} will be triggered in the following cases:
 \begin{itemize}[nosep]
 	\item Invalid input format, including calling unsupported functions.
-	\item Called from a system operation (e.g. $\mathsf{CALLCODE}$, $\mathsf{DELEGATECALL}$) in EVM.
+	\item Called from operations in $\mathsf{CALLCODE}$, $\mathsf{DELEGATECALL}$ or $\mathsf{STATICCALL}$ in EVM.
     \item Trying to set sponsorship for an inexistent or non-contract address.
     \item When setting sponsor for gas or collateral, the sender is distinct from the current \textbf{sponsor} and the transferred balance does not exceed the current \textbf{sponsor balance for gas/collateral}.
     \item When setting sponsor for gas, the transferred balance is less than $1000$ times of the new \textbf{sponsor limit for gas fee}.
@@ -155,7 +155,7 @@ This contract will trigger \emph{Internal Contract Exception} in the following c
 \begin{itemize}[nosep]
 	\item Invalid input format, including calling unsupported functions.
 
-	\item Called from a system operation (e.g. $\mathsf{CALLCODE}$, $\mathsf{DELEGATECALL}$) in EVM.
+	\item Called from operations in $\mathsf{CALLCODE}$, $\mathsf{DELEGATECALL}$ or $\mathsf{STATICCALL}$ in EVM.
     \item Try to destroy a contract with non-zero storage collateral (the corresponding storage must be released first). 
 \end{itemize}
 
@@ -291,7 +291,7 @@ The execution of Staking Contract will trigger \emph{Internal Contract Exception
 \begin{itemize}[nosep]
 	\item Invalid input format, including calling unsupported functions.
 
-	\item Called from a system operation, e.g. via $\mathsf{CALLCODE}$ or $\mathsf{DELEGATECALL}$.
+	\item Called from operations in $\mathsf{CALLCODE}$, $\mathsf{DELEGATECALL}$ or $\mathsf{STATICCALL}$ in EVM.
 
     \item Not enough balance for the requested operation.
 \end{itemize}

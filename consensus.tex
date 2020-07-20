@@ -85,7 +85,7 @@ Given a new block $\block$ that is no longer {\bf suspending}, the validation of
 							G_\mathsf{txdatanonzero} & \mbox{otherwise}
 						\end{cases}\notag\\
 						&+ \begin{cases}
-							G_\mathsf{txcreate} & \mbox{if $T_a=\emptyset$}\\
+							G_\mathsf{txcreate} & \mbox{if $T_a=\varnothing$}\\
 							0 & \mbox{otherwise}
 						\end{cases}\notag\\
 						&+ G_\mathsf{transaction}
@@ -344,7 +344,7 @@ In case two blocks have no partial order relation, {\name} breaks ties determini
 	$\mathbf{L} \longleftarrow \mathrm{ConfluxOrder}( \block';\graph)$\;
 	$\mathbf{L}' \longleftarrow \text{An empty list}$\;
 	$\mathsf{\Delta} \longleftarrow \past(\block) \backslash \left(\past(\block') \union \set{\block'}\right)$\;
-	\While {$\mathsf{\Delta} \neq \emptyset$} {
+	\While {$\mathsf{\Delta} \neq \varnothing$} {
 		% $\mathsf{\Delta}' \longleftarrow \set{\tilde{\block} \in \mathsf{\Delta} \mid 
 		% \forall \ablock\in\mathsf{\Delta}  \left(\tilde{\block}\notin\past(\ablock) \right) }$\;
 		% |\future({\tilde \block};\graph)\cap \mathsf{\Delta}| = 0}$\;

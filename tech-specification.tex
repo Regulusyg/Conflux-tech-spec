@@ -277,6 +277,7 @@ Starting block gas limit & $\startblockgastlimit=\startblockgastlimitline$ \\
 Anti-cone penalty factor ($\gamma$) & $\anticoneconstant$ \\
 Deferred execution & \deferblk epochs\\
 Mining reward freezing time & \minerfreeze\xspace epochs \\
+Snapshot period & \snapshotperiod\xspace epochs \\ 
 % Internal Contract Address & \\
 AdminControl Contract Address& $\admincontract$ \\
 SponsorControl Contract Address& $\sponsorcontract$ \\
@@ -387,6 +388,8 @@ The Ethereum contract is also a valid Conflux contract. So Ethereum contracts ca
 			$\hyperlink{CREATE}{\op{CREATE}}$ costs $G_{create}=32000$, regardless initilization code length	
 			& $\hyperlink{CREATE}{\op{CREATE}}$ costs the same as $\hyperlink{CREATE2}{\op{CREATE2}}$  & \cref{eq:gas_cost} \\
 			\cline{2-4}
+			& the maximum size of the byte-code is 24756 bytes & The maximum size of the byte-code is 49152 bytes & section~\ref{sec:creation}\\
+			\cline{2-4}
 			& on address conflict, reset contract but inherit the balance &  
 			on address conflict, abort the contract creation   
 			& \cref{sec:creation}  \smallskip\\
@@ -481,6 +484,63 @@ The fee schedule $G$ is a tuple of $35$ scalar values corresponding to the relat
 		\bottomrule
 	\end{tabu}
 \end{center}
+
+\newpage
+\section{Internal Contract Gas}\label{sec:internal_gas}
+When calling internal contract, the call data $I_\mathbf{d}$ is interpreted as a function call to Solidity interface.
+$\\$
+
+\begin{tabu}{llll}
+	\hline
+	Address $c$ & Solidity interface & Formal parameters & $V(\st,c,I_\mathbf{d})$ \\
+	\hline
+	\multirow{2}{*}{$a_{\sf admin}$} & {\tt \small set\char`_admin(address,address)} & $a_0,a_1\in \B_{160}$ & $G_{sset}$\\\cline{2-4}
+	& {\tt \small destroy(address)} & $a_0\in \B_{160}$ & $G_{sset}$ \\\hline
+	\multirow{4}{*}{$a_{\sf sponsor}$} & {\tt \small set\char`_sponsor\char`_for\char`_gas(address,uint256)}  & $a_0\in \B_{160},n_1\in \N_{256}$ & $G_{sset}$\\\cline{2-4}
+	& {\tt \small set\char`_sponsor\char`_for\char`_collateral(address)}  & $a_0\in \B_{160}$ &  $2\times G_{sset}$\\\cline{2-4}
+	& {\tt \small add\char`_privilege(address[])} & $\mathbf{a}\in \B_{160}^*$ & $|\mathbf{a}|\times G_{sset}$ \\\cline{2-4}
+	& {\tt \small remove\char`_privilege(address[])} & $\mathbf{a}\in \B_{160}^*$ & $|\mathbf{a}|\times G_{sset}$ \\ \hline
+	\multirow{3}{*}{$a_{\sf stake}$} & {\tt \small deposit(uint256)}  & $n_0\in \N_{256}$ & $2\times(|\st[s]_{deposit}|+1)\times G_{sset}$\\\cline{2-4}
+	& {\tt \small withdraw(uint256)}  & $n_0\in \N_{256}$ &  $2\times|\st[s]_{deposit}|\times G_{sset}$\\\cline{2-4}
+	& {\tt \small vote\char`_lock(uint256,uint256)} & $n_0,n_1\in \N_{256}$ & $2\times|1+\tolist(\st[s]_{vote})|\times G_{sset}$ \\\hline
+	\multicolumn{4}{l}{where $\st[s]'_{vote} \eqdef \st[s]_{vote} \text{ removing all the key }x\text{ with }\st[s]_{vote}[x]=\st[s]_{vote}[x-1]$}
+\end{tabu}
+
+
+\section{Storage maintenance}\label{sec:storage_maintain}
+
+Conflux charges storage collateral and refunds the collateral to payer when the storage entry is released or occupied by another one. So Conflux must track the owner for each storage entry and makes storage write operation difficult. Here we formally describe what happens when set a storage by function $\Phi(\st,a,k,v,o)$, which tries to set storage entry $k$ of account $a$ to value $v$ and address $o$ is the storage owner. It returns updated world-state $\st'$ and a substate $A$. 
+
+
+\begin{align}
+	\st'   &\eqdef \st \qquad \mbox{  except:}\\ 
+	\st'[a]_{\bf s}[k] &\eqdef\left\{
+		\begin{array}{ll}
+			(v,o) & v\neq 0\\
+			\varnothing & v= 0\\
+		\end{array}
+	\right.\\
+	A & \eqdef A^{*} \Cup A^{**}\\
+	\text{where:} & \\
+	 s &\eqdef \st[a]_{\bf s}[k] \\
+	 s' &\eqdef \st'[a]_{\bf s}[k]\\ 
+	 A^{*} &\eqdef A^0 \mbox{ except: } \\
+	 A^{*}_{\bf c}[s_o]&\eqdef -64 \mbox{ if $s\neq\varnothing$} \\
+	 A^{**} &\eqdef A^0 \mbox{ except:} \\
+	 A^{**}_{\bf c}[s'_o]&\eqdef 64 \mbox{ if $s'\neq\varnothing$} 
+\end{align}
+
+There are five special storage entries in staking vote contract $\stakingcontract$, which record the statistic information about Conflux blockchain. Their owners are always the staking vote contract. Their keys are list as follows 
+\begin{align}
+	& \sf [accumulate\char`_interest\char`_rate]_{\sf ch} \\ 
+	& \sf [interest\char`_rate]_{\sf ch} \\
+    & \sf [total\char`_staking\char`_tokens]_{\sf ch} \\
+    & \sf [total\char`_storage\char`_tokens]_{\sf ch} \\
+    & \sf [total\char`_issued\char`_tokens]_{\sf ch} 
+\end{align}
+
+The \cvm can never access these entries via \op{SSTORE} or \op{SLOAD} operations since they can only be accessed by the internal contract. In this document, we don't use function $\Phi$ when dealing with these entries and thus function $\Phi$ does not need to consider this special case. 
+
 
 \newpage
 \input{instructions}

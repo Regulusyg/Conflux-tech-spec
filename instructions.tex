@@ -56,7 +56,7 @@ where:
 C_{mem}(a) \equiv G_{memory} \cdot a + \left\lfloor \dfrac{a^2}{512} \right\rfloor
 \end{equation}
 
-with $C_\text{\tiny CALL}$, $C_\text{\tiny SELFDESTRUCT}$ and $C_\text{\tiny SSTORE}$ as specified in the appropriate section below. We define the following subsets of instructions:
+with $C_\text{\tiny CALL}$ and $C_\text{\tiny SELFDESTRUCT}$ as specified in the appropriate section below. We define the following subsets of instructions:
 
 $W_{zero}$ = \{$\op{STOP}$, $\op{RETURN}$, $\op{REVERT}$\}
 
@@ -312,31 +312,31 @@ as defined in Section \ref{sec:exe model}.
 \toprule
 \multicolumn{5}{c}{\textbf{40s: Block Information}} \vspace{5pt} \\
 \textbf{Value} & \textbf{Mnemonic} & $\popstack$ & $\pushstack$ & \textbf{Description} \vspace{5pt} \\
-\linkdest{BLOCKHASH}{}0x40 & $\op{BLOCKHASH}$ & 1 & 1 & Get the hash of the last block. \\
+\linkdest{BLOCKHASH}{}0x40 & $\op{BLOCKHASH}$ & 1 & 1 & Get the hash of the last block in block order. \\
 &&&&
 In {\name}, we only maintain the block hash of the previous block.\\
 &&&&
 When querying other block numbers, the returned result is always $0$.\\
 \linkdest{blockhash}{}&&&& $\mst'_{\mathbf{s}}[0] \equiv 
 \begin{cases}
-	I_{\mathbf{H}_{\mathrm{p}}} & \text{if} \quad \mst_{\mathbf{s}}[0] = H_{\mathrm{i}} \\
+	\kec(I_{{\head}_{\mathbf{L}}}[-1]) & \text{if} \quad \mst_{\mathbf{s}}[0] = |I_{{\head}_{\mathbf{L}}}|-1 \\
 	0 & \text{otherwise}
 \end{cases}$ \\
 \midrule
 0x41 & $\op{COINBASE}$ & 0 & 1 & Get the block's beneficiary address. \\
-&&&& $\mst'_{\mathbf{s}}[0] \equiv {I_{H}}_{\mathrm{c}}$ \\
+&&&& $\mst'_{\mathbf{s}}[0] \equiv I_{{\head}_{\mathrm{c}}}$ \\
 \midrule
 0x42 & $\op{TIMESTAMP}$ & 0 & 1 & Get the block's timestamp. \\
-&&&& $\mst'_{\mathbf{s}}[0] \equiv {I_{H}}_{\mathrm{s}}$ \\
+&&&& $\mst'_{\mathbf{s}}[0] \equiv I_{{\head}_{\mathrm{s}}}$ \\
 \midrule
-0x43 & $\op{NUMBER}$ & 0 & 1 & Get the block's number. \\
-&&&& $\mst'_{\mathbf{s}}[0] \equiv {I_{H}}_{\mathrm{i}}$ \\
+0x43 & $\op{NUMBER}$ & 0 & 1 & Get the block's index in total order. (The index of genesis block is 0.) \\
+&&&& $\mst'_{\mathbf{s}}[0] \equiv |I_{{\head}_{\mathbf{L}}}|$ \\
 \midrule
 0x44 & $\op{DIFFICULTY}$ & 0 & 1 & Get the block's difficulty. \\
-&&&& $\mst'_{\mathbf{s}}[0] \equiv {I_{H}}_{\mathrm{d}}$ \\
+&&&& $\mst'_{\mathbf{s}}[0] \equiv I_{{\head}_{\mathrm{d}}}$ \\
 \midrule
 0x45 & $\op{GASLIMIT}$ & 0 & 1 & Get the block's gas limit. \\
-&&&& $\mst'_{\mathbf{s}}[0] \equiv {I_{H}}_{\mathrm{l}}$ \\
+&&&& $\mst'_{\mathbf{s}}[0] \equiv I_{{\head}_{\ell}}$ \\
 \midrule
 \linkdest{CHAINID}{} 0x46 & $\op{CHAINID}$ & 0 & 1 & Get the chain ID. \\
 &&&& $\mst'_{\mathbf{s}}[0] \equiv \chainid$ \\
@@ -368,18 +368,13 @@ When querying other block numbers, the returned result is always $0$.\\
 &&&& The addition in the calculation of $\mst'_{\mathrm{i}}$ is not subject to the $2^{256}$ modulo. \\
 \midrule
 0x54 & $\op{SLOAD}$ & 1 & 1 & Load word from storage. \\
-&&&& $\mst'_{\mathbf{s}}[0] \equiv \st[I_{\mathrm{a}}]_{\mathbf{s}}[\mst_{\mathbf{s}}[0]]$ \\
+&&&& $\mst'_{\mathbf{s}}[0] \equiv \st[I_{\mathrm{a}}]_{\mathbf{s}}[\mst_{\mathbf{s}}[0]]_v$ \\
 \midrule
-\linkdest{SSTORE}{}0x55 & $\op{SSTORE}$ & 2 & 0 & Save word to storage. \\
-&&&& $\st'[I_{\mathrm{a}}]_{\mathbf{s}}[ \mst_{\mathbf{s}}[0] ] \equiv \mst_{\mathbf{s}}[1] $ \\
-% &&&&\linkdest{C__SSTORE}{} $C_{\text{\tiny SSTORE}}(\st, \mst) \equiv \begin{cases}
-% G_{sset} & \text{if} \quad \mst_{\mathbf{s}}[1] \neq 0 \; \wedge \; \st[I_{\mathrm{a}}]_{\mathbf{s}}[\mst_{\mathbf{s}}[0]] = 0 \\
-% G_{sreset} & \text{otherwise}
-% \end{cases}$ \\
-% &&&&\linkdest{A r}{} $A'_{r} \equiv A_{r} + \begin{cases}
-% R_{sclear} & \text{if} \quad \mst_{\mathbf{s}}[1] = 0 \; \wedge \; \st[I_{\mathrm{a}}]_{\mathbf{s}}[\mst_{\mathbf{s}}[0]] \neq 0 \\
-% 0 & \text{otherwise}
-% \end{cases}$ \\
+\linkdest{SSTORE}{}0x55 & $\op{SSTORE}$ & 2 & 0 & Save word and its owner to storage \\
+% &&&& $\st'[I_{\mathrm{a}}]_{\mathbf{s}}[ \mst_{\mathbf{s}}[0] ] \equiv (\mst_{\mathbf{s}}[1],I_i) $ \\
+&&&&$(\st',A^{*})\eqdef \Phi(\st,I_a,\mst_{\sf s}[0],\mst_{\sf s}[1],I_i)$\\
+&&&&$A'\eqdef A \Cup A^{*}$\\
+&&&&where $\Phi$ is defined in section~\ref{sec:storage_maintain}\\
 \midrule
 \linkdest{JUMP}{}0x56 & $\op{JUMP}$ & 1 & 0 & Alter the program counter. \\
 &&&& $J_{\op{JUMP}}(\mst) \equiv \mst_{\mathbf{s}}[0] $ \\
@@ -534,10 +529,10 @@ When querying other block numbers, the returned result is always $0$.\\
 \linkdest{create}{} 0xf0 & $\op{CREATE}$ & 3 & 1 & Create a new account with associated code. \\
 &&&& $\mathbf{i} \equiv \mst_{\mathbf{m}}[ \mst_{\mathbf{s}}[1] \dots (\mst_{\mathbf{s}}[1] + \mst_{\mathbf{s}}[2] - 1) ]$ \\
 &&&& $\zeta \equiv \varnothing$ \\
-&&&& $(\st', \mst'_{\mathrm{g}}, A^+, \mathbf{o}) \equiv \begin{cases}\Lambda(\st^*, I_{\mathrm{a}}, I_{\mathrm{o}}, L(\mst_{\mathrm{g}}), I_{\mathrm{p}}, \mst_{\mathbf{s}}[0], \mathbf{i}, I_{\mathrm{e}} + 1, \zeta, I_{\mathrm{w}}) & \text{if} \quad \mst_{\mathbf{s}}[0] \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \; \\ \quad &\wedge\; I_{\mathrm{e}} < 1024\\ \big(\st, \mst_{\mathrm{g}}, \varnothing\big) & \text{otherwise} \end{cases}$ \\
+&&&& $(\st', \mst'_{\mathrm{g}}, A^+, \mathbf{o}) \equiv \begin{cases}\Lambda(\st^*, I_{\mathrm{a}}, I_{\mathrm{o}}, I_\vec{t}\cdot I_a, I_i, L(\mst_{\mathrm{g}}), I_{\mathrm{p}}, \mst_{\mathbf{s}}[0], \mathbf{i}, I_{\mathrm{e}} + 1, \zeta, I_{\mathrm{w}}) & \text{if} \quad \mst_{\mathbf{s}}[0] \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \; \\ \quad &\wedge\; I_{\mathrm{e}} < 1024\\ \big(\st, \mst_{\mathrm{g}}, \varnothing\big) & \text{otherwise} \end{cases}$ \\
 &&&& $\st^* \equiv \st \quad \text{except} \quad \st^*[I_{\mathrm{a}}]_{\mathrm{n}} = \st[I_{\mathrm{a}}]_{\mathrm{n}} + 1$ \\
-&&&& $A' \equiv A \Cup A^+$ which abbreviates: $A'_{\mathbf{s}} \equiv A_{\mathbf{s}} \cup A^+_{\mathbf{s}} \quad \wedge \quad A'_{\mathbf{l}} \equiv A_{\mathbf{l}} \cdot A^+_{\mathbf{l}} \quad \wedge$ \\
-&&&& $A'_{\mathbf{t}} \equiv A_{\mathbf{t}} \cup A^+_{\mathbf{t}} \wedge \quad A'_{\mathbf{r}} \equiv A_{\mathbf{r}} + A^+_{\mathbf{r}}$ \\
+% &&&& $A' \equiv A \Cup A^+$ which abbreviates: $A'_{\mathbf{s}} \equiv A_{\mathbf{s}} \cup A^+_{\mathbf{s}} \quad \wedge \quad A'_{\mathbf{l}} \equiv A_{\mathbf{l}} \cdot A^+_{\mathbf{l}} \quad \wedge$ \\
+% &&&& $A'_{\mathbf{t}} \equiv A_{\mathbf{t}} \cup A^+_{\mathbf{t}} \wedge \quad A'_{\mathbf{r}} \equiv A_{\mathbf{r}} + A^+_{\mathbf{r}}$ \\
 &&&& $\mst'_{\mathbf{s}}[0] \equiv x$ \\
 &&&& where $x=0$ if the code execution for this operation failed due to an\\
 &&&& \hyperlink{Exceptional_Halting_function_Z}{exceptional halting} (or for a \op{REVERT}) $\st' = \varnothing$, or $I_{\mathrm{e}} = 1024$ \\
@@ -550,7 +545,18 @@ When querying other block numbers, the returned result is always $0$.\\
 \midrule
 0xf1 & $\op{CALL}$ & 7 & 1 & Message-call into an account. \\
 &&&& $\mathbf{i} \equiv \mst_{\mathbf{m}}[ \mst_{\mathbf{s}}[3] \dots (\mst_{\mathbf{s}}[3] + \mst_{\mathbf{s}}[4] - 1) ]$ \\
-&&&& $(\st', g', A^+, \mathbf{o}) \equiv \begin{cases}\begin{array}{l}\Theta(\st, I_{\mathrm{a}}, I_{\mathrm{o}}, t, t, C_{\text{\tiny CALLGAS}}(\mst),\\ \quad I_{\mathrm{p}}, \mst_{\mathbf{s}}[2], \mst_{\mathbf{s}}[2], \mathbf{i}, I_{\mathrm{e}} + 1, I_{\mathrm{w}})\end{array} & \begin{array}{l}\text{if} \quad \mst_{\mathbf{s}}[2] \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \;\wedge \\ \quad\quad I_{\mathrm{e}} < 1024\end{array}\\ (\st, g, \varnothing, \emptystring) & \text{otherwise} \end{cases}$ \\
+&&&& $(\st', g', A^+, \mathbf{o}) \equiv \begin{cases}
+	\begin{array}{l}
+		\Theta(\st, I_{\mathrm{a}}, I_{\mathrm{o}}, t, I_\vec{t}\cdot I_a,I_i, t, C_{\text{\tiny CALLGAS}}(\mst),\\ \quad I_{\mathrm{p}}, \mst_{\mathbf{s}}[2], \mst_{\mathbf{s}}[2], \mathbf{i}, I_{\mathrm{e}} + 1, I_{\mathrm{w}})\end{array} & 
+		\text{if} \quad p\\ 
+	(\st, g, \varnothing, \emptystring) & 
+	\text{otherwise} 
+\end{cases}$ \\
+&&&&$ \begin{array}{l}
+	p\eqdef \mst_{\mathbf{s}}[2] \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \;\wedge \; I_{\mathrm{e}} < 1024  
+	\;\wedge \; \mathsf{Type}_{t} \in \set{\typereserved,\typenormal,\typecontract} \\ 
+	\quad \quad \wedge\; (t\notin I_\vec{t}\;\vee\; t= I_a\;\vee\; (C_{\text{\tiny CALLGAS}}(\st, \mst)\le G_{callstipend} \;\wedge\; \mst_{\mathbf{s}}[4]=0))
+\end{array}$\\
 &&&& $n \equiv \min(\{ \mst_{\mathbf{s}}[6], \lVert \mathbf{o} \rVert\})$ \\
 &&&& $\mst'_{\mathbf{m}}[ \mst_{\mathbf{s}}[5] \dots (\mst_{\mathbf{s}}[5] + n - 1) ] = \mathbf{o}[0 \dots (n - 1)]$ \\
 &&&& $\mst'_{\mathbf{o}} = \mathbf{o}$ \\
@@ -559,9 +565,8 @@ When querying other block numbers, the returned result is always $0$.\\
 &&&& $A' \equiv A \Cup A^+$ \\
 &&&& $t \equiv \mst_{\mathbf{s}}[1] \mod 2^{160}$ \\
 &&&& where $x=0$ if the code execution for this operation failed due to an\\
-&&&& \hyperlink{Exceptional_Halting_function_Z}{exceptional halting} (or for a \op{REVERT}) $\st' = \varnothing$ or if \\
-&&&& $\mst_{\mathbf{s}}[2] > \st[I_{\mathrm{a}}]_{\mathrm{b}}$ (not enough funds) or $I_{\mathrm{e}} = 1024$ (call depth limit reached); $x=1$ \\
-&&&& otherwise. \\
+&&&& \hyperlink{Exceptional_Halting_function_Z}{exceptional halting} (or for a \op{REVERT}) $\st' = \varnothing$ or if $p=\false$ \\
+&&&& which means \cvm prevents this call; $x=1$  otherwise. \\
 &&&& $\mst'_{\mathrm{i}} \equiv M(M(\mst_{\mathrm{i}}, \mst_{\mathbf{s}}[3], \mst_{\mathbf{s}}[4]), \mst_{\mathbf{s}}[5], \mst_{\mathbf{s}}[6])$ \\
 &&&& Thus the operand order is: gas, to, value, in offset, in size, out offset, out size. \\
 &&&&\linkdest{tiny CALL}{} $C_{\text{\tiny CALL}}(\st, \mst) \equiv C_{\text{\tiny GASCAP}}(\st, \mst) + C_{\text{\tiny EXTRA}}(\st, \mst)$ \\
@@ -588,7 +593,17 @@ G_{newaccount} & \text{if} \quad \mathtt{DEAD}(\st, \mst_{\mathbf{s}}[1] \mod 2^
 \midrule
 0xf2 & $\op{CALLCODE}$ & 7 & 1 & Message-call into this account with an alternative account's code. \\
 &&&& Exactly equivalent to $\op{CALL}$ except: \\
-&&&& $(\st', g', A^+, \mathbf{o}) \equiv \begin{cases}\begin{array}{l}\Theta(\st^*, I_{\mathrm{a}}, I_{\mathrm{o}}, I_{\mathrm{a}}, t, C_{\text{\tiny CALLGAS}}(\mst), \\ \quad I_{\mathrm{p}}, \mst_{\mathbf{s}}[2], \mst_{\mathbf{s}}[2], \mathbf{i}, I_{\mathrm{e}} + 1, I_{\mathrm{w}})\end{array} & \begin{array}{l}\text{if} \quad \mst_{\mathbf{s}}[2] \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \;\wedge\\ \quad\quad{}I_{\mathrm{e}} < 1024\end{array} \\ (\st, g, \varnothing, \emptystring) & \text{otherwise} \end{cases}$ \\
+&&&& $(\st', g', A^+, \mathbf{o}) \equiv 
+\begin{cases}
+	\begin{array}{l}
+		\Theta(\st^*, I_{\mathrm{a}}, I_{\mathrm{o}}, I_{\mathrm{a}}, I_\vec{t}\cdot I_a, I_i, \\
+		\quad t, C_{\text{\tiny CALLGAS}}(\mst),I_{\mathrm{p}}, \mst_{\mathbf{s}}[2], \\ 
+		\quad  \mst_{\mathbf{s}}[2], \mathbf{i}, I_{\mathrm{e}} + 1, I_{\mathrm{w}})
+	\end{array} 
+		& \text{if} \quad p \\ 
+	(\st, g, \varnothing, \emptystring) & \text{otherwise} 
+\end{cases}$ \\
+&&&& where $p\eqdef \mst_{\mathbf{s}}[2] \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \;\wedge\; I_{\mathrm{e}} < 1024 \;\wedge\; \mathsf{Type}_{t} \in \set{\typereserved,\typenormal,\typecontract}.$ \\
 &&&& Note the change in the fourth parameter to the call $\Theta$ from the 2nd stack value \\
 &&&& $\mst_{\mathbf{s}}[1]$ (as in $\op{CALL}$) to the present address $I_{\mathrm{a}}$. This means that the recipient is in\\
 &&&& fact the same account as at present, simply that the code is overwritten.\\
@@ -605,7 +620,15 @@ G_{newaccount} & \text{if} \quad \mathtt{DEAD}(\st, \mst_{\mathbf{s}}[1] \mod 2^
 &&&& omitted argument is $\mst_{\mathbf{s}}[2]$. As a result, $\mst_{\mathbf{s}}[3]$, $\mst_{\mathbf{s}}[4]$, $\mst_{\mathbf{s}}[5]$ and $\mst_{\mathbf{s}}[6]$ in the\\
 &&&& definition of $\op{CALL}$ should respectively be replaced with $\mst_{\mathbf{s}}[2]$, $\mst_{\mathbf{s}}[3]$, $\mst_{\mathbf{s}}[4]$ and\\
 &&&& $\mst_{\mathbf{s}}[5]$. Otherwise it is equivalent to $\op{CALL}$ except:\\
-&&&& $(\st', g', A^+, \mathbf{o}) \equiv \begin{cases}\begin{array}{l}\Theta(\st^*, I_{\mathrm{s}}, I_{\mathrm{o}}, I_{\mathrm{a}}, t, C_{\text{\tiny CALLGAS}}(\mst), \\\quad I_{\mathrm{p}}, 0, I_{\mathrm{v}}, \mathbf{i}, I_{\mathrm{e}} + 1, I_{\mathrm{w}})\end{array} & \text{if} \quad I_{\mathrm{v}} \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \;\wedge \\ \; I_{\mathrm{e}} < 1024 \\(\st, g, \varnothing, \emptystring) & \text{otherwise} \end{cases}$ \\
+&&&& $(\st', g', A^+, \mathbf{o}) \equiv 
+\begin{cases}
+	\begin{array}{l}
+		\Theta(\st^*, I_{\mathrm{s}}, I_{\mathrm{o}}, I_{\mathrm{a}}, I_\vec{t}\cdot I_a, I_i ,t, C_{\text{\tiny CALLGAS}}(\mst), \\\quad I_{\mathrm{p}}, 0, I_{\mathrm{v}}, \mathbf{i}, I_{\mathrm{e}} + 1, I_{\mathrm{w}})
+	\end{array} & \text{if} \quad p
+	 \\
+	(\st, g, \varnothing, \emptystring) & \text{otherwise} 
+\end{cases}$ \\
+&&&& where $p\eqdef I_{\mathrm{v}} \leqslant \st[I_{\mathrm{a}}]_{\mathrm{b}} \;\wedge\; I_{\mathrm{e}} < 1024 \;\wedge\; \mathsf{Type}_{t} \in \set{\typereserved,\typenormal,\typecontract}.$ \\
 &&&& Note the changes (in addition to that of the fourth parameter) to the second \\
 &&&& and ninth parameters to the call $\Theta$.\\
 &&&& This means that the recipient is in fact the same account as at present, simply\\
@@ -628,13 +651,21 @@ G_{newaccount} & \text{if} \quad \mathtt{DEAD}(\st, \mst_{\mathbf{s}}[1] \mod 2^
 &&&& $\mst'_{\mathrm{i}} \equiv M(\mst_{\mathrm{i}}, \mst_{\mathbf{s}}[0], \mst_{\mathbf{s}}[1])$ \\
 \midrule
 0xfe & $\op{INVALID}$ & $\varnothing$ & $\varnothing$ & Designated invalid instruction. \\
-\midrule
+\end{tabu}
+
+\begin{tabu}{\usetabu{opcodes}}
+	\toprule
 \linkdest{SELFDESTRUCT}{}0xff & $\op{SELFDESTRUCT}$ & 1 & 0 & Halt execution and register account for later deletion. \\
-&&&& $A'_{\mathbf{s}} \equiv A_{\mathbf{s}} \cup \{ I_{\mathrm{a}} \}$ \\
+&&&& Conflux Preprocessing for SELFDESTRUCT defined in \cref{eq:suicide_start} to \cref{eq:suicide_end} \\
+&&&& and outputs $(\st^*,A^*)$ \\ 
+&&&& $A'_{\mathbf{s}} \equiv A^*_{\mathbf{s}} \cup \{ I_{\mathrm{a}} \}$ \\
 &&&& $\st'[r] \equiv \begin{cases}
-\varnothing &\text{if}\ \st[r] = \varnothing\ \wedge\ \st[I_{\mathrm{a}}]_{\mathrm{b}} = 0\\
-(\st[r]_{\mathrm{n}}, \st[r]_{\mathrm{b}} + \st[I_{\mathrm{a}}]_{\mathrm{b}}, \st[r]_{\mathbf{s}}, \st[r]_{\mathrm{c}}) & \text{if}\ r \neq I_{\mathrm{a}} \\
-(\st[r]_{\mathrm{n}}, 0, \st[r]_{\mathbf{s}}, \st[r]_{\mathrm{c}}) & \text{otherwise}
+\varnothing &\text{if}\ \st^*[r] = \varnothing\ \wedge\ \st^*[I_{\mathrm{a}}]_{\mathrm{b}} = 0\\
+\begin{array}{l}
+	(\st^*[r]_{\mathrm{n}}, \st^*[r]_{\mathrm{b}} + \st^*[I_{\mathrm{a}}]_{\mathrm{b}}, \\
+	\quad\st^*[r]_{\mathbf{s}}, \st^*[r]_{\mathrm{c}})
+\end{array} & \text{if}\ r \neq I_{\mathrm{a}} \wedge \mathsf{Type}_r \in \set{\typereserved,\typenormal,\typecontract}\\
+(\st^*[r]_{\mathrm{n}}, 0, \st^*[r]_{\mathbf{s}}, \st^*[r]_{\mathrm{c}}) & \text{otherwise}
 \end{cases}$\\ \\
 &&&& where $r = \mst_{\mathbf{s}}[0] \bmod 2^{160}$\\ \\
 &&&& $\st'[I_{\mathrm{a}}]_{\mathrm{b}} = 0$ \\
@@ -642,7 +673,7 @@ G_{newaccount} & \text{if} \quad \mathtt{DEAD}(\st, \mst_{\mathbf{s}}[1] \mod 2^
 G_{newaccount} & \text{if} \quad n \\
 0 & \text{otherwise}
 \end{cases}$ \\
-&&&& $n \equiv \mathtt{DEAD}(\st, \mst_{\mathbf{s}}[0] \mod 2^{160}) \wedge \st[I_{\mathrm{a}}]_{\mathrm{b}} \neq 0$ \\
+&&&& $n \equiv \mathtt{DEAD}(\st^*, \mst_{\mathbf{s}}[0] \mod 2^{160}) \wedge \st[I_{\mathrm{a}}]_{\mathrm{b}} \neq 0$ \\
 \bottomrule
 \end{tabu}
 

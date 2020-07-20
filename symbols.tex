@@ -21,6 +21,7 @@
 \newcommand{\creation}{\ensuremath{\mathrm{\Lambda}}}
 \newcommand{\execute}{\ensuremath{\mathrm{\Xi}}}
 \newcommand{\execution}{\ensuremath{\mathrm{\Theta}}}
+\newcommand{\sstore}{\ensuremath{\mathrm{\Phi}}}
 
 \newcommand{\account}{\ensuremath{\mathbf{\alpha}}}
 \newcommand{\contract}{\ensuremath{\mathbf{C}}}
@@ -72,10 +73,11 @@
 
 
 % Unit of {\name} tokens
-\newcommand{\unit}{{\textsf Drip}\xspace}
-\newcommand{\gunit}{{\textsf GDrip}\xspace}
-\newcommand{\coin}{{\textsf Conflux}\xspace}
-\newcommand{\coinsign}{{\textsf CFX}\xspace}
+\newcommand{\unit}{{\sf Drip}\xspace}
+\newcommand{\gunit}{{\sf GDrip}\xspace}
+\newcommand{\coin}{{\sf Conflux}\xspace}
+\newcommand{\coinsign}{{\sf CFX}\xspace}
+\newcommand{\ucoinsign}{{\sf uCFX}\xspace}
 \newcommand{\cfx}{\coinsign}
 
 
@@ -106,6 +108,7 @@
 \newcommand{\chain}{\ensuremath{\mathsf{CHAIN}}}
 \newcommand{\sible}{\ensuremath{\mathsf{SIBLING}}}
 \newcommand{\weight}{\ensuremath{\mathsf{Weight}}}
+\newcommand{\tolist}{\ensuremath{\mathsf{ToList}}}
 
 
 \newcommand{\timerchain}{\ensuremath{\mathsf{TimerChain}}}
@@ -167,10 +170,13 @@
 \newcommand{\txepochbound}{{\color{red}100000}}
 
 \newcommand{\startblockgastlimit}{3\times 10^7}
+\newcommand{\collateralperbyte}{\frac{10^{18}}{1024}}
+\newcommand{\collateralperbyteline}{10^{18}/{1024}}
 \newcommand{\startblockgastlimitline}{30000000}
 \newcommand{\maxblocksize}{{$200$} KB}
 \newcommand{\maxblocksizeinbytes}{\ensuremath{204800}}
-
+\newcommand{\snapshotperiod}{100000}
+\newcommand{\minblockgaslimit}{10^7}
 
 
 %%%%%%%%%%%%%%%%%%%%
@@ -262,8 +268,8 @@
 
 % \newcommand{\startdifficulty}{5\times 10^9}
 % \newcommand{\startdifficultyline}{5000000000}
-\newcommand{\startdifficulty}{5\times 10^6}
-\newcommand{\startdifficultyline}{5000000}
+\newcommand{\startdifficulty}{5\times 10^3}
+\newcommand{\startdifficultyline}{5000}
 
 \newcommand{\mindifficulty}{\startdifficultyline\xspace}
 \newcommand{\diffup}{{1.5}\xspace}

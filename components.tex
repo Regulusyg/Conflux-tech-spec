@@ -13,8 +13,8 @@ In this section we discuss the meaning of accounts, transactions and blocks in m
 \label{subsec:accounts}
 
 The {\name} global state is described in an account model, with the basic storage component called an \emph{account}.
-Every actor, which is either a person or an entity that is able to interact with the {\name} world, has its necessary information stored in an account $\account$  as a key/value pair $(\account_{addr}, \account_{state})$ of address and state.
-The account address $\account_{addr}$ is a 160-bit identifier, and the account state $\account_{state}$ is a serialized sequence in an $\rlp$ structure (c.f. \cite{ETH_yellow}).
+Every actor, which is either a person or an entity that is able to interact with the {\name} world, has its necessary information stored in an account $\account$  as a key/value pair $(\account_{addr}, \account_{state})$ of address and corresponding states. 
+The account address $\account_{addr}$ is a 160-bit identifier. The account state $\account_{state}= (\account_{basic},\account_{code}, \account_{storage},\account_{deposit},\account_{vote})$ consists of five components. The account basic state $\account_{state}$, the code info $\account_{code}$, the deposit list $\account_{deposit}$ and the vote list $\account_{vote}$ are four serialized sequences in an $\rlp$ structure (c.f. \cite{ETH_yellow}). The account storage $\account_{storage}$ is a set of key-value pairs which map 256-bit address to a serialized storage information in an $\rlp$ structure. 
 Furthermore we note that each account $\account$ is associated with a pair of public key and private key $\left(\account_{pubkey}, \account_{prikey}\right)$.
 The account address is the concatenation of $4$-bit type indicator and a $156$-bit digest of the associated public key: 
 \begin{equation}\label{eq:account-address}
@@ -28,7 +28,9 @@ and $\mathsf{Type}_{\account}=\typereserved$ for \emph{built-in/reserved contrac
 
 For succinctness and convenience, and as long as there is no ambiguity, we will write $\account$ without subscript for the state of an account and let $a\eqdef \account_{addr}$ denote the corresponding address.
 
-An account state $\account_{state} \eqdef\left( \account_n, \account_b, \account_c,\account_t, \account_o, \account_r, \account_d, \account_v, \account_a, \account_p, \account_w , \account_{\bf s}\right)$ consists of the following fields:
+\paragraph{Basic state}
+
+An account basic state $\account_{basic} \eqdef\left( \account_n, \account_b, \account_c,\account_t, \account_o, \account_r, \account_a, \account_p\right)$ consists of the following fields. 
 \begin{itemize}[nosep]
 	\item {\bf nonce:} A scalar counter recording the number of previous activities initiated by this account. Formally denoted by $\account_n\in \N_{256}$. For example, the number of transactions sent from $\account_{addr}$, or the number of contract-creations in the case this account is associated with codes.
 
@@ -37,7 +39,6 @@ An account state $\account_{state} \eqdef\left( \account_n, \account_b, \account
 	\item {\bf codeHash:} The hash of the \cvm code  that gets executed when $\account_{addr}$ receives a message call. 
 	Unlike other fields, it is immutable once established. All such code fragments are stored in a state database for later retrieval. This hash is formally denoted by $\account_c\in \B_{256}$,
 	which satisfies $\account_c=\kec\left(\mathbf{p} \right)$ when the stored code is $\mathbf{p}$.  
-	In particular $\account_{c} =\kec(\emptystring )$ is the hash of the empty string when $\account$ is a normal account.
 
 	\item {\bf stakingBalance:} A scalar value equal to the number of staked \unit. Formally denoted by $\account_t\in \N_{256}$. (See section~\ref{sec:staking} for details)
 	
@@ -45,20 +46,20 @@ An account state $\account_{state} \eqdef\left( \account_n, \account_b, \account
 	
 	\item {\bf accumulatedInterestReturn:} A scalar value equal to the number of \unit in accumulated interest return. Formally denoted by $\account_r\in \N_{256}$. (See section~\ref{sec:staking} for details)
 	
-	\item {\bf depositList:} A series of deposit information. Formally denoted by $\account_d\in (\N_{256}\times \N_{512}\times \N_{256})^*$. (See section~\ref{sec:staking} for details)
+	% \item {\bf depositList:} A series of deposit information. Formally denoted by $\account_d\in (\N_{256}\times \N_{512}\times \N_{256})^*$. (See section~\ref{sec:staking} for details)
 	
-	\item {\bf stakingVoteList:} A series of vote infomation. Formally denoted by $\account_v\in (\N_{256}\times \N_{512})^*$. (See section~\ref{sec:staking} for details)
+	% \item {\bf stakingVoteList:} A series of vote infomation. Formally denoted by $\account_v\in (\N_{256}\times \N_{512})^*$. (See section~\ref{sec:staking} for details)
 	
 	\item {\bf admin:} The address of the administrator if $\account$ is a contract.  Formally denoted by $\account_a\in \B_{160}$. (See section~\ref{sec:admin} for details)
 	
 	\item {\bf sponsorInfo:} The sponsor information if $\account$ is a contract. It contains five components: {\bf sponsor for gas}, {\bf sponsor for collateral}, {\bf sponsor balance for gas}, {\bf sponsor gas limit}, {\bf sponsor balance for gas} and {\bf sponsor collateral for gas}. Formally denoted by $\account_p\in (\B_{160})^2\times (\N_{256})^3$. (See section~\ref{sec:sponsor} for details). We use $\account_p[{\sf gas}]_a$, $\account_p[{\sf col}]_a$, 
 	$\account_p[{\sf limit}]_a$, $\account_p[{\sf gas}]_b$ and $\account_p[{\sf col}]_b$ to reference these five components. 
 	
-	\item {\bf codeOwner:} The address of the payer who provides the collateral for storaging the code if $\account$ is a contract. Formally denoted by $\account_w\in \B_{160}$. 
+	% \item {\bf codeOwner:} The address of the payer who provides the collateral for storaging the code if $\account$ is a contract. Formally denoted by $\account_w\in \B_{160}$. 
 	
-	\item {\bf storage:} A key/value database representing the account's storage state, if $\account$ is a contract account. 
-	Every entry is represented as $(k,v,o)\in \B_{256}\times \N_{256}\times \B_{160}$, where $k$ and $v$ denote the key and value of this entry and $o$ denotes the owner who provides storage collateral for this entry.
-	Formally denoted by $\account_{\bf s} \in \left( \B_{256}\times \N_{256}\times \B_{160} \right)^*$.
+	% \item {\bf storage:} A key/value database representing the account's storage state, if $\account$ is a contract account. 
+	% Every entry is represented as $(k,v,o)\in \B_{256}\times \N_{256}\times \B_{160}$, where $k$ and $v$ denote the key and value of this entry and $o$ denotes the owner who provides storage collateral for this entry.
+	% Formally denoted by $\account_{\bf s} \in \left( \B_{256}\times \N_{256}\times \B_{160} \right)^*$.
 	
 	% It encodes a key/value database into the trie as a mapping from the Keccak $256$-bit hash of the $256$-bit integer keys to the \rlp-encoded $256$-bit integer values.
 	% This root node hash is formally denoted by $\account_s$.
@@ -80,14 +81,14 @@ An account state $\account_{state} \eqdef\left( \account_n, \account_b, \account
 
 % If the {\bf codeHash} field of an account $\account$ is the hash of the empty string, i.e. $\account_{c} =\kec\big(()\big)$, then $\account$ is a \emph{simple account}, also called \emph{``non-contract'' account}.
 
+\paragraph{Storage state}
 
-
-Given the {\name} world-state $\st$ and an address $a\in\B_{160}$, we denote by $\st [a]$ for the state $\account_{state}$ of the account $\account$ with address $a=\account_{addr}$, i.e. $\st [a] \eqdef \account_{state}$.
-% \left(\account_n, \account_b, \account_s, \account_c \right)$.
-We denote by $\st[a]\eqdef \emptyset$ if the account with address $a$ is never initialized. 
+An account's storage state $\account_{storage}$ is a key/value database representing the account's storage state, if $\account$ is a contract account. 
 %
-When $\st[a]\neq\bot$, we use $\st[a]_{\bf s}[k]_v$ and $\st[a]_{\bf s}[k]_o$ to denote the storage value and storage owner of storage entry 
-with key $k$ in $\st[a]_{\bf s}$. We denote by $\st[a]_{\bf s}[k]_o=\emptyset$ and $\st[a]_{\bf s}[k]_v=\emptyset$ in case key $k$ doesn't exist in $\st[a]_{\bf s}$,
+Every storage entry is keyed by a 256-bit string or a 320-bit string $k\in \B_{256}\cup \B_{320}$ and is represented as $(v,o)\in \N_{256}\times \B_{160}$, where $v$ denotes the value stored in this entry and $o$ denotes the owner who provides storage collateral for this entry. (See section~\ref{sec:collateral} for details about storage collateral.)
+
+We use $\account_{\bf s}[k]$ to represent storage entry $(v,o)$ keyed by $k$ and use $\account_{\bf s}[k]_v$ and $\account_{\bf s}[k]_o$ to denote corresponding fields. We denote by $\account_{\bf s}[k]=\varnothing$ for the case the storage state doesn't contain an entry with key $k$. 
+
 
 % Since we have contract address conflict exception, we no longer need these functions.
 % Given a world-state $\st$, an account is \emph{empty} in this state if it has zero nonce, zero balance, and no code.
@@ -96,7 +97,7 @@ with key $k$ in $\st[a]_{\bf s}$. We denote by $\st[a]_{\bf s}[k]_o=\emptyset$ a
 % \end{align}
 % An account is \emph{dead} if its account state is non-existent or empty.
 % \begin{align}
-% 	\mathsf{DEAD}(\st, a) \eqdef \left[ \st[a]=\emptyset \;\lor\;\mathsf{EMPTY}(\st,a)\right]
+% 	\mathsf{DEAD}(\st, a) \eqdef \left[ \st[a]=\varnothing \;\lor\;\mathsf{EMPTY}(\st,a)\right]
 % \end{align}
 
 % We also define the account validity function $v$ as follows:
@@ -106,101 +107,151 @@ with key $k$ in $\st[a]_{\bf s}$. We denote by $\st[a]_{\bf s}[k]_o=\emptyset$ a
 % 	\N_{256} \land \account_b\in \N_{256} \land \account_s\in \B_{256} \land \account_c\in\B_{256}\right]
 % \end{align}
 % For every legal world-state $\st$ and for every address $a\in\B_{160}$, 
-% % there is either $\st[a]=\emptyset$ or $v\left(\st[a]\right)=1$.
+% % there is either $\st[a]=\varnothing$ or $v\left(\st[a]\right)=1$.
 % the account with address $a$ is either unused or valid, i.e.
 % \begin{align}
-% 	\forall a\in\B_{160}: \left(\st[a] = \emptyset \right) \lor \left(  v\left(\st[a]\right)\right)
+% 	\forall a\in\B_{160}: \left(\st[a] = \varnothing \right) \lor \left(  v\left(\st[a]\right)\right)
 % \end{align}
 
 % Thus we define the \emph{world-state collapse function} $L_S$ that translates the world-state $\st$ into account states:
 % \begin{align}
 % 	L_S(\st) \eqdef \set{ \big(a, \rlp(\st[a]_n, \st[a]_b, \st[a]_s, \st[a]_c) \big) \;\big|\; a\in\B_{160}
-% 	\land \st[a]\ne \emptyset}
+% 	\land \st[a]\ne \varnothing}
 % \end{align}
 
 % This function $L_S$ and the trie function $\trie$ are used in conjunction to provide a short hash digest of the {\name} world-state.
 
-A default account will be initialized as 
-%
-\begin{align}\label{eq:default_acc}
-	\account^0\equiv (0,0,0,0,0,0,\emptystring, \emptystring, 0,(0,0,0,0,0))
+\paragraph{Code information}
+
+For a contract account $\account$, its code information $\account_{code}\eqdef (\account_{\bf p},\account_{w})$ stores the account code $\account_{\bf p}\in \Byte^*$ and the address $\account_{w}\in \B_{160}$ who paid the code storage collateral.
+
+\paragraph{Staking vote info}
+
+An account's staking vote list $\account_{vote}$ is a key/value set representing the vote staking info unlock at given block number. Each entry is keyed by a block ordering index $i\in\N_{64}$ stores the staking vote amount $s\in \N_{256}$ in $\unit$. It means that the account promises to lock at least $s\;\unit$ before block with order index $i$. See section~\ref{sec:staking} for more details.
+
+\paragraph{Deposit list}
+
+An account's deposit list $\account_{deposit}\in (\N_{256}\times \N_{64}\times \N_{256})^*$ is a series of deposit item. Each entry is a handful of deposited tokens in a ternary tuple of its amount (in \unit), its deposit time (measured in the total number of blocks) and its accumulated interest rate. We use $\account_{deposit}[{\sf amt}],\account_{deposit}[{\sf idx}],\account_{deposit}[{\sf accIR}]$ refers the three compoments. See section~\ref{sec:staking} for more details.
+$\\$
+
+In initialization of each component, Conflux sets all the bit values, byte values and integers to zero and sets arbitrary length series to empty set, except the code hash which is set to the hash value of empty string. So each account state component is initialized as follows
+\begin{align}
+	\account^0_{basic} &\eqdef (0,0,\kec(\emptystring),0,0,0,0,(0,0,0,0,0)) \\
+	\account^0_{basic\_smp} &\eqdef (0,0,0,0,0) \\
+	\account^0_{code} &\eqdef (\varepsilon,0) \\
+	\account^0_{storage} &\eqdef \varepsilon \\
+	\account^0_{vote} &\eqdef \varepsilon \\
+	\account^0_{deposit} &\eqdef \varepsilon \\
+	\account^0 & \eqdef (\account^0_{basic},\account^0_{code},\account^0_{storage},\account^0_{vote},\account^0_{deposit})\label{eq:default_account}
 \end{align}
+
+%
+Given the {\name} world-state $\st$ and an address $a\in\B_{160}$, we denote by $\st [a]$ for the state $\account_{state}$ of the account $\account$ with address $a=\account_{addr}$, i.e. $\st [a] \eqdef \account_{state}$.
+% \left(\account_n, \account_b, \account_s, \account_c \right)$.
+We denote by $\st[a]\eqdef \varnothing$ if the account with address $a$ is never initialized. 
+%
+Also, we denote by $\st[a]_{\bf s}$ for storage component $\account_{storage}$ and $\st[a]_{\bf v}$ for staking vote component $\st[a]_{vote}$. 
+
+The world-state $\st$ never stores the account state $\account_{state}$ equals to initialization value $\account^0$. So $\st[a]\eqdef \varnothing$ is equivalent to $\st[a]\eqdef \account^0$. For the key value structure components $\account_{\bf s}$ and $\account_{\bf v}$, we also use the notation $\varnothing$ and zero initialization value indistinguishably.
 
 \subsection{Hash Digest of World-State}
 
-\subsubsection{State entry}
+\subsubsection{State entries}
 
-Conflux organizes the account information into a set of key/value pairs with four different types and encodes them in format of $(k,v)\in \B^*\times \B^*$ respectively. 
+Conflux encodes each component of each account in format of $(k,v)\in \B^*\times \B^*$ respectively. 
 
-\paragraph{Account entry.} The account entry stores all the components $\left( \account_n, \account_b, \account_c,\account_t, \account_o, \account_r, \account_d, \account_v, \account_a, \account_p\right)$ except {\bf storage} $\account_{\bf s}$ and {\bf codeOwner} {$\account_w$} in account state $\account_{state}$. In this case, we have 
+\paragraph{Basic entry.} The basic entry stores basic components $\account_{basic}$. Specially, for a non-contract address, Conflux doesn't stores the fields only related to contract, like code hash $\account_c$, contract admin $\account_a$ and sponsor info $\account_p$. Let $\account_{basic\_smp}\eqdef (\account_n, \account_b, \account_t, \account_o, \account_r)$ denote the basic component with only the fields in a normal address. Formally
 \begin{align}
 	&k\eqdef \alpha_{addr}\\
-	&v\eqdef \rlp(\account_n, \account_b, \account_c,\account_t, \account_o, \account_r, \account_d, \account_v, \account_a, \account_p)
+	&v\eqdef \left\{\begin{array}{ll}
+		\rlp(\account_{basic}) & \mathsf{Type}_\alpha=[1000]_2 \\
+		\rlp(\account_{basic\_smp}) & \mathsf{otherwise}
+	\end{array}\right.
 \end{align}
+	
+	
 
 \paragraph{Storage entry.} The storage entry stores all the storages in $\account_{\bf s}$. Given account $\alpha$ with address $\alpha_{addr}$, for each storage key $s\in \B_{256}$ with $\account_{\bf s}[s]_v\neq 0$, we have 
 \begin{align}
 	&k\eqdef \alpha_{addr}\cdot [{\sf data}]_{\sf ch}\cdot s \\
-	&v\eqdef \rlp(\account_{\bf s}[s]_v,\account_{\bf s}[s]_o)
+	&v\eqdef \left\{ \begin{array}{ll}
+		\rlp\left(\account_{\bf s}[s]_v\right) & \alpha_{addr} = \account_{\bf s}[s]_o \\ 
+		\rlp\left(\account_{\bf s}[s]\right) & \mbox{otherwise}
+	\end{array}\right.
 \end{align}
 
 \paragraph{Storage root entry.} The storage root entry stores the storage layout for account $\account$. 
 \begin{align}
 	&k\eqdef \alpha_{addr}\cdot [{\sf data}]_{\sf ch}\\
-	&v\eqdef 0
+	&v\eqdef \emptystring
 \end{align}
 
-\paragraph{Code entry.} The code entry stores the {\bf code} $\bf p\in \B^*$ for account $\alpha$, with {\bf codeHash} denoted by $\alpha_c=\kec({\bf p})$. 
+\paragraph{Code entry.} The code entry stores the component code info $\account_{code}$. 
 \begin{align}
 	&k\eqdef \alpha_{addr}\cdot [{\sf code}]_{\sf ch}\cdot \alpha_c  \\
-	&v\eqdef \rlp({\bf p},\alpha_w)
+	&v\eqdef \rlp(\account_{code})
+\end{align}
+
+\paragraph{Staking vote list entry.} The staking vote list entry stores the component staking vote list $\account_{vote}$. 
+\begin{align}
+	k&\eqdef \alpha_{addr}\cdot [{\sf vote}]_{\sf ch}  \\
+	v&\eqdef \rlp(\tolist(\account'_{vote}))\\
+	\mbox{where:}&\notag\\ 
+	\account'_{vote} &\eqdef \mbox{$\account_{vote}$ removing all the key $x$ with $\account_{vote}[x]=\account_{vote}[x-1]$}
+\end{align}
+
+\paragraph{Deposit list entry.} The deposit list entry stores the component deposit list $\account_{deposit}$. 
+\begin{align}
+	&k\eqdef \alpha_{addr}\cdot [{\sf deposit}]_{\sf ch}  \\
+	&v\eqdef \rlp(\account_{deposit})
 \end{align}
 
 \subsubsection{Multi-version Merkle Patricia Trie}
 
 Ethereum collects all the key/value pairs into MPT (Merkle Patricia Trie) and updates it during execution of transactions. However, in a high throughput blockchain system, the MPT may be accessed in a high frequency and hence become a bottleneck of performance. Conflux maintains a \textbf{read-through write-back} cache and commits cached changes to MPT periodically. 
 
-Formally, at any time, Conflux maintains three key/value sets $T_0,T_1,T_2$, which are called {\bf snapshot}, {\bf intermediate set} and {\bf delta set} respectively. The later one is the cache of the former one. $T_2$ is the only one updated during transaction execution. In order to balance the keys in MPT {\bf delta set} and achieve a high performance, $T_2$ has a different way in computing keys. Let 
+Formally, at any time, Conflux maintains three key/value sets $T_0,T_1,T_2$, which are called {\bf snapshot}, {\bf intermediate set} and {\bf delta set} respectively. The later one is the cache of the former one. $T_2$ is the only one updated during transaction execution. In order to balance the keys in MPT {\bf delta set} and achieve a high performance, MPT $T_2$ has a different way in computing keys. Let 
 %
 \begin{align}
 	&p\eqdef\kec(\trie(T_0),\trie(T_1)) \\
 	&f_{addr}(\alpha_{addr},p)\eqdef\kec(p[0..11]\cdot \alpha_{addr})[0..11]\cdot \alpha_{addr} \\ 
-	&f_{store}(s,p)\eqdef \kec(p\cdot s)[4..31]\cdot s
+	&f_{store}(s,p)\eqdef \kec(p\cdot s)[4..31]\cdot s\\
+	&\text{(The index here are applied on byte-level.)} \notag
 \end{align}
-(The index here are applied on byte-level.)
-the key is defined as (the symbols are inherited from the previous section)
+
+The key is defined as (the symbols are inherited from the previous section)
 \begin{itemize}[nosep]
-	\item {\bf Account entry.} $k\eqdef f_{addr}(\alpha_{addr},p)$
+	\item {\bf Basic entry.} $k\eqdef f_{addr}(\alpha_{addr},p)$
 	\item {\bf Storage entry.} $k\eqdef f_{addr}(\alpha_{addr},p)\cdot [{\sf data}]_{\sf ch}\cdot f_{store}(s,p)$
 	\item {\bf Storage root entry.} $k\eqdef f_{addr}(\alpha_{addr},p)\cdot [{\sf data}]_{\sf ch}$
 	\item {\bf Code entry.} $k\eqdef f_{addr}(\alpha_{addr},p)\cdot [{\sf code}]_{\sf ch}\cdot \alpha_c$
+	\item {\bf Staking vote list entry.} $k\eqdef f_{addr}(\alpha_{addr},p)\cdot [{\sf vote}]_{\sf ch}$
+	\item {\bf Deposit entry.} $k\eqdef f_{addr}(\alpha_{addr},p)\cdot [{\sf deposit}]_{\sf ch}$
+ 
 \end{itemize}
 
 \paragraph{Delta set.}
 
-During transaction execution, each time an account or storage entry is added, updated or removed, it will be marked dirty and its newest content will be added to the delta set when the transaction execution succeed. 
+After a successful transaction execution, if a state entry is added, updated or removed after execution of one transaction, its newest content will be added to the delta set. Notice that the delta set only compares the state entry before and after a transaction execution. It is not aware of the intermediate steps during transaction execution. 
 %
-Specially, if the storage entries $\alpha_{\bf s}$ of an account $\alpha$ are updated, account entry and storage root entry for $\alpha$ will also be marked dirty and added to delta set even if their contents are not changed. The code owner $\alpha_w$ is immutable once contract $\alpha$ has been created. 
+% Specially, if the storage entries $\alpha_{\bf s}$ of an account $\alpha$ are updated, account entry and storage root entry for $\alpha$ will also be marked dirty and added to delta set even if their contents are not changed. The code owner $\alpha_w$ is immutable once contract $\alpha$ has been created. 
 %
-Once an entry is marked dirty, the dirty mark will not be removed unless the execution reverted or failed. 
+%
+In case of deleting a state entry, an initialization value for corresponding entry will be added to the delta set representing deletion operation. 
 
-In case of removing account, storage or code from the world-state, an empty account $\alpha^0$, empty storage entry $(0,0)$ or empty code $(\emptystring,0)$ for corresponding entry will be added to the delta set representing deletion operation.
-
-At the time ???, Conflux will merge intermediate set $T_1$ to snapshot $T_0$, move delta set to intermediate set and reset delta set as empty. 
+The intermediate MPT will be merged to snapshot MPT every $\snapshotperiod$ epochs. In particular, for some integer $N$, after execution of epoch $\snapshotperiod\cdot N$, \footnote{Since Conflux defers the execution of transactions for $\deferblk$ epochs, the \emph{execution of epoch $i$} means the execution for transactions in epoch $i-\deferblk$. See block component {\bf deferredStateRoot} for details.} Conflux will merge intermediate set $T_1$ to snapshot $T_0$ before computing the state root of pivot block on epoch $\snapshotperiod\cdot N$. Each time the intermediate MPT is merged, Conflux sets current delta MPT as new intermediate set and resets delta set as emptyset. Formally,  
 \begin{align}
 	T'_0 &\equiv \mathsf{MPTMerge}(T_0,T_1) \\
 	T'_1 &\equiv T_2 \\
-	T'_2 &\equiv \emptyset
+	T'_2 &\equiv \varnothing
 \end{align}
 %
-where $\mathsf{MPTMerge}$ is the function updates the entries in $T_0$ which have new version in $T_1$. Specially, for the entries with empty content (an empty account $\alpha^0$, empty storage entry $(0,0)$ or empty code $(\emptystring,0)$), $T_0$ removes them.  
-
-
+where $\mathsf{MPTMerge}$ is the function updates the entries in $T_0$ which have a new version value in $T_1$. Specially, for the entries with initialization value, $T_0$ removes them.  
 
 
 \subsubsection{State root}
 
-Let $\trie(T^{(i)}_0),\trie(T^{(i)}_1),\trie(T^{(i)}_2)$ be the roots of MPT after execution transaction of epoch $i$, then the state root of epoch $i$ should be 
+Let $\trie(T^{(i)}_0),\trie(T^{(i)}_1),\trie(T^{(i)}_2)$ be the roots of MPT after execution of epoch $i$, then the state root of epoch $i$ should be 
 %
 $$ StateRoot^{(i)}\eqdef\kec(\rlp(\trie(T^{(i)}_0),\trie(T^{(i)}_1),\trie(T^{(i)}_2))).$$
 
@@ -233,7 +284,7 @@ Both types of transactions share the following common fields:
 	A variable size field indicating the action of this transaction, formally denoted by $\tx_a$. 
 	There is a sub-field {\bf create} indicating whether $\tx$ is a contract creation transaction, which we make it implicit for notation convenience. 
 	Thus, for action transactions $\tx_a$ indicates the $160$-bit address of the recipient, which refers to either a normal account or a contract account;
-	otherwise in case of a creation transaction, the recipient is indeed the newly created contract and we interpret $\tx_a$ as the only element in $\B_0$ and write $\tx_a = \emptyset$.
+	otherwise in case of a creation transaction, the recipient is indeed the newly created contract and we interpret $\tx_a$ as the only element in $\B_0$ and write $\tx_a = \emptystring$.
 
 	\item {\bf value:} A scalar value equal to the amount of \unit that the transactions sender wants to transfer to the recipient, i.e. the account specified in $\tx_a$ or the newly created contract.
 	Formally denoted by $\tx_v\in\N_{256}$.
@@ -243,7 +294,7 @@ Both types of transactions share the following common fields:
 
 	\item \newversion{{\bf epochHeight:} A scalar value specifying the range of epochs where $\tx$ can be executed. Formally denoted by $\tx_e\in\N_{64}$ such that $\tx$ can only be executed between the epochs of $[\tx_e - \txepochbound, \tx_e + \txepochbound]$. }
 
-	\item \newversion{{\bf chainID:} A binary chain id indicating where $\tx$ is intended to be executed. Formally denoted by $\tx_c\in\B_{64}$ and the chain id of {\name} is a constant $\tx_c=503$.} 
+	\item \newversion{{\bf chainID:} A binary chain id indicating where $\tx$ is intended to be executed. Formally denoted by $\tx_c\in\N_{32}$ and the chain id of {\name} is a constant $\tx_c=503$.} 
 
 	\item {\bf v, r, s:} Corresponding fields of the recoverable ECDSA signature of $\tx$, formally denoted by $\tx_w$, $\tx_r$ and $\tx_s$. 
 \end{itemize}
@@ -267,7 +318,7 @@ For convenience, we further introduce the function $L_{\tx}$ that parses a trans
 \begin{align}\label{def:tx_prepare}
 	L_{\tx}(\tx)\eqdef 
 	\begin{cases}
-	\left(\tx_n, \tx_p, \tx_g, \tx_a, \tx_v, \newversion{\tx_\ell,\tx_e,\tx_c,} \tx_{\bf i}, \tx_w,\tx_r,\tx_s \right) & \mbox{if $\tx_a=\emptyset$} \\
+	\left(\tx_n, \tx_p, \tx_g, \tx_a, \tx_v, \newversion{\tx_\ell,\tx_e,\tx_c,} \tx_{\bf i}, \tx_w,\tx_r,\tx_s \right) & \mbox{if $\tx_a=\emptystring$} \\
 	\left(\tx_n, \tx_p, \tx_g, \tx_a, \tx_v, \newversion{\tx_\ell,\tx_e,\tx_c,} \tx_{\bf d}, \tx_w,\tx_r,\tx_s \right) & \mbox{otherwise}
 	\end{cases}
 \end{align}
@@ -400,15 +451,22 @@ and store these receipts in an index-keyed trie.
 This root is recorded in the header as $\head_e\in\B_{256}$.
 
 
-For every executed transaction $\tx$, the receipt $R\eqdef \left(R_u, R_b, R_{\bf l}, R_z,R_{\bf o},R_{\bf i}\right)$ is a tuple consisting of six fields:
+For every executed transaction $\tx$, the receipt $R\eqdef \left(R_u, R_f, R_g, R_b, R_{\bf l}, R_z,R_{\bf o},R_s,R_{\bf i}\right)$ is a tuple consisting of six fields:
 \begin{itemize}[nosep]
-	\item $R_u\in\N$ is the cumulative gas used \emph{in the epoch where $\tx$ is executed} as of immediately after $\tx$ has been processed;
+	\item $R_u\in\N_{256}$ is the cumulative gas used \emph{in the epoch where $\tx$ is executed} as of immediately after $\tx$ has been processed;
+	
+	\item $R_f\in\N_{256}$ is the gas fee charged for the current transaction. 
+	
+	\item $R_g \in \B$ denotes whether the gas fee is sponsored. 
 
 	\item $R_{\bf l}$ is the set of logs created in the execution of $\tx$;
 
 	\item $R_b\in\B_{2048}$ is the Bloom filter composed from logs in $R_{\bf l}$;
 
 	\item $R_z\in\N$ is the status code of the transaction $\tx$.
+	
+	\item $R_s \in \B$ denotes whether the storage collateral is sponsored. 
+
 	
 	\item $R_{\bf o}$ is the set of incremental storage (in bytes) for addresses in the execution of $\tx$;
 
@@ -524,7 +582,7 @@ and comparing to $\head\big(\parentf(\block)\big)$ and $\past(\block)$ when nece
 	\item the height is increased by one;
 	\item the timestamp (in Unix's time()) is increased;
 
-	\item the canonical gas limit does not change too much (i.e. more than $1/1024$) and it remains above $5000$;
+	\item the canonical gas limit does not change too much (i.e. more than $1/1024$) and it remains above $\minblockgaslimit$;
 
 	\item the target difficulty is properly set according to Section~\ref{sec:difficulty};
 
@@ -562,9 +620,8 @@ Formally, the header $\head$ is valid if and only if:
 \begin{align}
 	&{\head_h} = \head\left(\parentf(\block)\right)_{h}+1\\
 	\land \qquad &{\head_s} > \head\left(\parentf(\block)\right)_{s}\\
-	\land \qquad &{\head_l} < \left(1+\frac{1}{1024}\right)\head\left(\parentf(\block)\right)_{l} \qquad
-	\land \qquad {\head_l}> \left(1-\frac{1}{1024}\right) \head\left(\parentf(\block)\right)_{l} \qquad
-	\land \qquad {\head_l}\ge 5000 \label{eq:blockgas}\\
+	\land \qquad & \left|{\head_l} -\head\left(\parentf(\block)\right)_{l}\right|< \left\lfloor\frac{\head\left(\parentf(\block)\right)_{l}}{1024}\right\rfloor \qquad
+	\land \qquad {\head_l}\ge \minblockgaslimit \label{eq:blockgas}\\
 	\land \qquad & \text{${\head_d}$ is legitimate according to the difficulty adjusting function}\\
 	\land \qquad & \text{${\head_x}$ is the correct mix-hash (see (\ref{eq:mixhash}) in Section~\ref{sec:pow})}\\
 	\land \qquad & \quality(\head) \ge {\head_d}\\
