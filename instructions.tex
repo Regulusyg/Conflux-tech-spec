@@ -31,7 +31,7 @@ G_{log}+G_{logdata}\times\mst_{\mathbf{s}}[1]+3G_{logtopic} & \text{if} \quad w 
 G_{log}+G_{logdata}\times\mst_{\mathbf{s}}[1]+4G_{logtopic} & \text{if} \quad w = \op{LOG4} \\
 C_\text{\tiny CALL}(\st, \mst) & \text{if} \quad w = \op{CALL} \lor \op{CALLCODE} \> \lor \\
 &\quad\op{DELEGATECALL} \\
-C_\text{\tiny SELFDESTRUCT}(\st, \mst) & \text{if} \quad w = \op{SELFDESTRUCT} \\
+C_\text{\tiny SUICIDE}(\st, \mst) & \text{if} \quad w = \op{SUICIDE} \\
 G_{create}+G_{sha3word} \times \lceil \mst_{\mathbf{s}}[2] \div 32 \rceil & \text{if} \quad w = \op{\hyperlink{create}{CREATE}}\\
 G_{create}+G_{sha3word} \times \lceil \mst_{\mathbf{s}}[2] \div 32 \rceil & \text{if} \quad w = \op{\hyperlink{CREATE2}{CREATE2}}\\
 G_{sha3}+G_{sha3word} \times \lceil \mst_{\mathbf{s}}[1] \div 32 \rceil & \text{if} \quad w = \op{SHA3}\\
@@ -56,7 +56,7 @@ where:
 C_{mem}(a) \equiv G_{memory} \cdot a + \left\lfloor \dfrac{a^2}{512} \right\rfloor
 \end{equation}
 
-with $C_\text{\tiny CALL}$ and $C_\text{\tiny SELFDESTRUCT}$ as specified in the appropriate section below. We define the following subsets of instructions:
+with $C_\text{\tiny CALL}$ and $C_\text{\tiny SUICIDE}$ as specified in the appropriate section below. We define the following subsets of instructions:
 
 $W_{zero}$ = \{$\op{STOP}$, $\op{RETURN}$, $\op{REVERT}$\}
 
@@ -655,8 +655,8 @@ G_{newaccount} & \text{if} \quad \mathtt{DEAD}(\st, \mst_{\mathbf{s}}[1] \mod 2^
 
 \begin{tabu}{\usetabu{opcodes}}
 	\toprule
-\linkdest{SELFDESTRUCT}{}0xff & $\op{SELFDESTRUCT}$ & 1 & 0 & Halt execution and register account for later deletion. \\
-&&&& Conflux Preprocessing for SELFDESTRUCT defined in \cref{eq:suicide_start} to \cref{eq:suicide_end} \\
+\linkdest{SUICIDE}{}0xff & $\op{SUICIDE}$ & 1 & 0 & Halt execution and register account for later deletion. \\
+&&&& Conflux Preprocessing for $\op{SUICIDE}$ defined in \cref{eq:suicide_start} to \cref{eq:suicide_end} \\
 &&&& and outputs $(\st^*,A^*)$ \\ 
 &&&& $A'_{\mathbf{s}} \equiv A^*_{\mathbf{s}} \cup \{ I_{\mathrm{a}} \}$ \\
 &&&& $\st'[r] \equiv \begin{cases}
@@ -669,7 +669,7 @@ G_{newaccount} & \text{if} \quad \mathtt{DEAD}(\st, \mst_{\mathbf{s}}[1] \mod 2^
 \end{cases}$\\ \\
 &&&& where $r = \mst_{\mathbf{s}}[0] \bmod 2^{160}$\\ \\
 &&&& $\st'[I_{\mathrm{a}}]_{\mathrm{b}} = 0$ \\
-&&&&\linkdest{C tiny SELFDESTRUCT}{} $C_{\text{\tiny SELFDESTRUCT}}(\st, \mst) \equiv G_{selfdestruct} + \begin{cases}
+&&&&\linkdest{C tiny SUICIDE}{} $C_{\text{\tiny SUICIDE}}(\st, \mst) \equiv G_{suicide} + \begin{cases}
 G_{newaccount} & \text{if} \quad n \\
 0 & \text{otherwise}
 \end{cases}$ \\

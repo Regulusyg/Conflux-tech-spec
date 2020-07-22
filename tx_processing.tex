@@ -659,7 +659,7 @@ Therefore the result of contract creation is either a successfully created new c
 \paragraph{Subtleties.} 
 Note that while the initialization code is executing, the newly created address exists but with no intrinsic body code. 
 Thus any message call received by it during this time causes no code to be executed. 
-If the initialization execution ends with a $\op{SELFDESTRUCT}$ instruction, the matter is moot since the account will be deleted before the transaction is completed. 
+If the initialization execution ends with a $\op{SUICIDE}$ instruction, the matter is moot since the account will be deleted before the transaction is completed. 
 For a normal $\op{STOP}$ code, or if the code returned is otherwise empty, then the world-state may left with a zombie account. Only the administrator of such contract can destroy it by calling the internal contract described in \cref{sec:admin}.
 
 
@@ -1181,7 +1181,7 @@ where
 \begin{equation}
 W(w, \mst) \eqdef \\
 \begin{array}[t]{ll}
-	& w \in \{ \op{CREATE},  \op{CREATE2},  \op{SSTORE}, \op{SELFDESTRUCT}\} \quad \\
+	& w \in \{ \op{CREATE},  \op{CREATE2},  \op{SSTORE}, \op{SUICIDE}\} \quad \\
 	\vee & \left(\op{LOG0} \le w \wedge w \le  \op{LOG4} \right)\\
 	\vee & \left(w \in \{ \op{CALL},  \op{CALLCODE}\} \wedge \mst_{\mathbf{s}}[2] \neq 0\right)
 \end{array}
@@ -1224,7 +1224,7 @@ The normal halting function $H$ is defined:
 H(\mst, I) \eqdef 
 	\begin{cases}
 	H_{\text{\tiny RETURN}}(\mst) & \text{if} \quad w \in \{ \op{\hyperlink{RETURN}{RETURN}},  \op{REVERT}\} \\
-	\emptystring \quad\quad& \text{if} \quad w \in \{  \op{\hyperlink{stop}{STOP}},  \op{\hyperlink{selfdestruct}{SELFDESTRUCT}} \} \\
+	\emptystring \quad\quad& \text{if} \quad w \in \{  \op{\hyperlink{stop}{STOP}},  \op{\hyperlink{selfdestruct}{SUICIDE}} \} \\
 	\varnothing \quad\quad& \text{otherwise}
 	\end{cases}
 \end{equation}
@@ -1351,7 +1351,7 @@ and there is no gas refund either.
 Furthermore, the {\name} ledger $\st$ tracks the owner of every storage entry with non-zero value. 
 The execution substate $A$ records all changes on ownership of storage entries. 
 
-\paragraph{$\op{SELFDESTRUCT}$ operation.} When executing the $\op{SELFDESTRUCT}$ operation on $(\st,\mu,A,I)$, Conflux follows the steps as below:
+\paragraph{$\op{SUICIDE}$ operation.} When executing the $\op{SUICIDE}$ operation on $(\st,\mu,A,I)$, Conflux follows the steps as below:
 \begin{itemize}[nosep]
 	\item Apply buffered changes on the sponsor balance for storage collateral. 
 	\begin{align}
